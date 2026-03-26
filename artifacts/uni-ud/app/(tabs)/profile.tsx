@@ -306,6 +306,20 @@ export default function ProfileScreen() {
           <Feather name="arrow-right" size={18} color="#00D4FF" />
         </Pressable>
       )}
+
+      {/* Company footer */}
+      <View style={styles.companyFooter}>
+        <View style={styles.companyBadge}>
+          <Feather name="hexagon" size={14} color="#00D4FF" />
+          <Text style={styles.companyName}>human.id labs</Text>
+        </View>
+        <Text style={[styles.companyTagline, { color: colors.textSecondary }]}>
+          Infraestructura de identidad digital
+        </Text>
+        <Text style={[styles.companyVersion, { color: colors.textSecondary }]}>
+          uni.id v1.0 · © 2026 human.id labs
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -437,4 +451,25 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   upgradeCTASub: { color: "#8896B0", fontSize: 12, fontFamily: "Inter_400Regular" },
+  companyFooter: {
+    alignItems: "center",
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    gap: 6,
+    marginTop: 8,
+  },
+  companyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 4,
+  },
+  companyName: {
+    color: "#00D4FF",
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.5,
+  },
+  companyTagline: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  companyVersion: { fontSize: 11, fontFamily: "Inter_400Regular" },
 });

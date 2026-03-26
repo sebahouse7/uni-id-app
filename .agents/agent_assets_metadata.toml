@@ -6,3 +6,9 @@ id = "GhX3Ca6HGehMoCql7YCgZ"
 uri = "file://documentos/declaracion_autoria_uni_id.md"
 type = "text"
 title = "Declaración de Autoría — uni.id (Sebastián Monteleón)"
+
+[[outputs]]
+id = "9GAlBdg1b2hnn3yz-TuCX"
+uri = "file://documentos/paquete_legal_human_id_labs.md"
+type = "text"
+title = "Paquete Legal Completo — human.id labs (Sebastián Monteleón)"
