@@ -171,10 +171,31 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {/* Security status bar */}
+      <Pressable
+        onPress={() => router.push("/(tabs)/security")}
+        style={({ pressed }) => [
+          styles.securityBar,
+          { borderColor: "#00D4FF40", opacity: pressed ? 0.85 : 1 },
+        ]}
+      >
+        <View style={styles.securityBarInner}>
+          <View style={styles.securityBarLeft}>
+            <View style={[styles.securityPulse, { backgroundColor: "#00FF9C" }]} />
+            <Feather name="shield" size={18} color="#00D4FF" />
+            <View>
+              <Text style={styles.securityBarTitle}>Sistema inmunológico activo</Text>
+              <Text style={styles.securityBarSub}>147.382 nodos · Amenaza baja</Text>
+            </View>
+          </View>
+          <Feather name="chevron-right" size={16} color="#00D4FF" />
+        </View>
+      </Pressable>
+
       {/* Network CTA if free */}
       {node?.networkPlan === "free" && (
         <Pressable
-          onPress={() => router.push("/network")}
+          onPress={() => router.push("/(tabs)/network")}
           style={({ pressed }) => [
             styles.networkCTA,
             { opacity: pressed ? 0.85 : 1 },
@@ -364,6 +385,42 @@ const styles = StyleSheet.create({
   networkCTASub: {
     color: "#8896B0",
     fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
+  securityBar: {
+    marginHorizontal: 20,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: "#060B18",
+    marginBottom: 12,
+  },
+  securityBarInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+    gap: 10,
+  },
+  securityBarLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  securityPulse: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  securityBarTitle: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 2,
+  },
+  securityBarSub: {
+    color: "#8896B0",
+    fontSize: 11,
     fontFamily: "Inter_400Regular",
   },
 });

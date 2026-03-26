@@ -19,7 +19,11 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="documents">
         <Icon sf={{ default: "doc.text", selected: "doc.text.fill" }} />
-        <Label>Documentos</Label>
+        <Label>Docs</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="security">
+        <Icon sf={{ default: "shield", selected: "shield.fill" }} />
+        <Label>Seguridad</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="network">
         <Icon sf={{ default: "network", selected: "network" }} />
@@ -88,12 +92,24 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="documents"
         options={{
-          title: "Documentos",
+          title: "Docs",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="doc.text" tintColor={color} size={24} />
             ) : (
               <Feather name="file-text" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="security"
+        options={{
+          title: "Seguridad",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="shield" tintColor={color} size={24} />
+            ) : (
+              <Feather name="shield" size={22} color={color} />
             ),
         }}
       />
