@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { CATEGORIES, useIdentity } from "@/context/IdentityContext";
+import { LANGUAGES, useLanguage } from "@/context/LanguageContext";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -22,6 +23,7 @@ export default function ProfileScreen() {
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
   const { node, documents, updateNode } = useIdentity();
+  const { t, lang, setLang } = useLanguage();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(node?.name ?? "");
   const [bio, setBio] = useState(node?.bio ?? "");
@@ -306,6 +308,26 @@ export default function ProfileScreen() {
           <Feather name="arrow-right" size={18} color="#00D4FF" />
         </Pressable>
       )}
+
+      {/* Language selector */}
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.language}</Text>
+      <View style={[styles.card, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
+        {LANGUAGES.map((l, i) => (
+          <View key={l.code}>
+            <Pressable
+              onPress={() => setLang(l.code)}
+              style={({ pressed }) => [styles.langRow, { opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Text style={styles.langFlag}>{l.flag}</Text>
+              <Text style={[styles.langLabel, { color: colors.text, flex: 1 }]}>{l.label}</Text>
+              {lang === l.code && <Feather name="check" size={18} color={colors.tint} />}
+            </Pressable>
+            {i < LANGUAGES.length - 1 && (
+              <View style={[styles.separator, { backgroundColor: colors.border }]} />
+            )}
+          </View>
+        ))}
+      </View>
 
       {/* Company footer */}
       <View style={styles.companyFooter}>

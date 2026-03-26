@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { useIdentity } from "@/context/IdentityContext";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface SecurityEvent {
   id: string;
@@ -139,6 +140,7 @@ export default function SecurityScreen() {
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
   const { node, documents } = useIdentity();
+  const { t } = useLanguage();
   const [threatLevel] = useState(12);
   const nodeCount = 147382;
   const protectedCount = 8241;
