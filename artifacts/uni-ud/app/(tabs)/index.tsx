@@ -28,9 +28,9 @@ export default function HomeScreen() {
   }
 
   const totalDocs = documents.length;
-  const recentDocs = [...documents].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  ).slice(0, 3);
+  const recentDocs = [...documents]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 3);
 
   const catCounts = CATEGORIES.map((cat) => ({
     ...cat,
@@ -64,40 +64,41 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {/* Node Card */}
-      <View style={[styles.nodeCard, { backgroundColor: colors.tint }]}>
-        <View style={styles.nodeCardInner}>
+      {/* Identity card */}
+      <View style={[styles.identityCard, { backgroundColor: colors.tint }]}>
+        <View style={styles.identityCardInner}>
           <View>
-            <Text style={styles.nodeLabel}>Mi Nodo de Identidad</Text>
-            <Text style={styles.nodeName}>{node?.name ?? "—"}</Text>
-            <View style={styles.planBadge}>
-              <View style={styles.planDot} />
-              <Text style={styles.planText}>
+            <Text style={styles.identityLabel}>Tu identidad digital</Text>
+            <Text style={styles.identityName}>{node?.name ?? "Mi Identidad"}</Text>
+            <View style={styles.verifiedBadge}>
+              <Feather name="check-circle" size={12} color="#00FF9C" />
+              <Text style={styles.verifiedText}>
                 {node?.networkPlan === "free"
-                  ? "Plan Gratuito"
+                  ? "Identidad activa"
                   : node?.networkPlan === "basic"
-                  ? "Red Básica"
-                  : "Red Pro"}
+                  ? "Identidad verificada"
+                  : "Identidad certificada"}
               </Text>
             </View>
           </View>
-          <View style={styles.nodeStats}>
-            <Text style={styles.nodeCount}>{totalDocs}</Text>
-            <Text style={styles.nodeCountLabel}>documentos</Text>
+          <View style={styles.identityStats}>
+            <Text style={styles.docCount}>{totalDocs}</Text>
+            <Text style={styles.docCountLabel}>documentos</Text>
           </View>
         </View>
-        {/* Decorative circles */}
         <View style={styles.circle1} />
         <View style={styles.circle2} />
       </View>
 
       {/* Categories */}
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Categorías</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Mis documentos</Text>
       <View style={styles.categoriesGrid}>
         {catCounts.map((cat) => (
           <Pressable
             key={cat.key}
-            onPress={() => router.push({ pathname: "/(tabs)/documents", params: { category: cat.key } })}
+            onPress={() =>
+              router.push({ pathname: "/(tabs)/documents", params: { category: cat.key } })
+            }
             style={({ pressed }) => [
               styles.categoryCard,
               {
@@ -129,7 +130,12 @@ export default function HomeScreen() {
       </View>
 
       {recentDocs.length === 0 ? (
-        <View style={[styles.emptyCard, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.emptyCard,
+            { backgroundColor: colors.backgroundCard, borderColor: colors.border },
+          ]}
+        >
           <Feather name="inbox" size={32} color={colors.textSecondary} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Sin documentos aún</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
@@ -143,7 +149,9 @@ export default function HomeScreen() {
             return (
               <Pressable
                 key={doc.id}
-                onPress={() => router.push({ pathname: "/document/[id]", params: { id: doc.id } })}
+                onPress={() =>
+                  router.push({ pathname: "/document/[id]", params: { id: doc.id } })
+                }
                 style={({ pressed }) => [
                   styles.recentItem,
                   {
@@ -153,11 +161,23 @@ export default function HomeScreen() {
                   },
                 ]}
               >
-                <View style={[styles.recentIcon, { backgroundColor: (cat?.color ?? "#1A6FE8") + "18" }]}>
-                  <Feather name={(cat?.icon as any) ?? "file"} size={20} color={cat?.color ?? "#1A6FE8"} />
+                <View
+                  style={[
+                    styles.recentIcon,
+                    { backgroundColor: (cat?.color ?? "#1A6FE8") + "18" },
+                  ]}
+                >
+                  <Feather
+                    name={(cat?.icon as any) ?? "file"}
+                    size={20}
+                    color={cat?.color ?? "#1A6FE8"}
+                  />
                 </View>
                 <View style={styles.recentInfo}>
-                  <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.recentTitle, { color: colors.text }]}
+                    numberOfLines={1}
+                  >
                     {doc.title}
                   </Text>
                   <Text style={[styles.recentCat, { color: colors.textSecondary }]}>
@@ -171,41 +191,37 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Security status bar */}
+      {/* Security status */}
       <Pressable
         onPress={() => router.push("/(tabs)/security")}
-        style={({ pressed }) => [
-          styles.securityBar,
-          { borderColor: "#00D4FF40", opacity: pressed ? 0.85 : 1 },
-        ]}
+        style={({ pressed }) => [styles.securityBar, { opacity: pressed ? 0.85 : 1 }]}
       >
         <View style={styles.securityBarInner}>
           <View style={styles.securityBarLeft}>
             <View style={[styles.securityPulse, { backgroundColor: "#00FF9C" }]} />
             <Feather name="shield" size={18} color="#00D4FF" />
             <View>
-              <Text style={styles.securityBarTitle}>Sistema inmunológico activo</Text>
-              <Text style={styles.securityBarSub}>147.382 nodos · Amenaza baja</Text>
+              <Text style={styles.securityBarTitle}>Protección activa</Text>
+              <Text style={styles.securityBarSub}>Tu información está segura</Text>
             </View>
           </View>
           <Feather name="chevron-right" size={16} color="#00D4FF" />
         </View>
       </Pressable>
 
-      {/* Network CTA if free */}
+      {/* Connection CTA if free */}
       {node?.networkPlan === "free" && (
         <Pressable
           onPress={() => router.push("/(tabs)/network")}
-          style={({ pressed }) => [
-            styles.networkCTA,
-            { opacity: pressed ? 0.85 : 1 },
-          ]}
+          style={({ pressed }) => [styles.networkCTA, { opacity: pressed ? 0.85 : 1 }]}
         >
           <View style={styles.networkCTAInner}>
             <Feather name="share-2" size={20} color="#00D4FF" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.networkCTATitle}>Activá la Red Cognitiva</Text>
-              <Text style={styles.networkCTASub}>Verificá tu identidad en todo el mundo</Text>
+              <Text style={styles.networkCTATitle}>Conectate a la red global</Text>
+              <Text style={styles.networkCTASub}>
+                Usá tu identidad en bancos, hospitales y más
+              </Text>
             </View>
             <Feather name="arrow-right" size={18} color="#00D4FF" />
           </View>
@@ -233,32 +249,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  nodeCard: {
+  identityCard: {
     marginHorizontal: 20,
     borderRadius: 20,
     padding: 24,
     marginBottom: 28,
     overflow: "hidden",
   },
-  nodeCardInner: {
+  identityCardInner: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     zIndex: 1,
   },
-  nodeLabel: {
+  identityLabel: {
     color: "rgba(255,255,255,0.75)",
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     marginBottom: 4,
   },
-  nodeName: {
+  identityName: {
     color: "#fff",
     fontSize: 22,
     fontFamily: "Inter_700Bold",
     marginBottom: 8,
   },
-  planBadge: {
+  verifiedBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -268,11 +284,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignSelf: "flex-start",
   },
-  planDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#00FF9C" },
-  planText: { color: "#fff", fontSize: 12, fontFamily: "Inter_500Medium" },
-  nodeStats: { alignItems: "center" },
-  nodeCount: { color: "#fff", fontSize: 40, fontFamily: "Inter_700Bold" },
-  nodeCountLabel: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontFamily: "Inter_400Regular" },
+  verifiedText: { color: "#fff", fontSize: 12, fontFamily: "Inter_500Medium" },
+  identityStats: { alignItems: "center" },
+  docCount: { color: "#fff", fontSize: 40, fontFamily: "Inter_700Bold" },
+  docCountLabel: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
   circle1: {
     position: "absolute",
     width: 120,
@@ -341,7 +360,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  emptySubtitle: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
+  emptySubtitle: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+  },
   recentList: { marginHorizontal: 20, gap: 10, marginBottom: 20 },
   recentItem: {
     flexDirection: "row",
@@ -361,6 +384,34 @@ const styles = StyleSheet.create({
   recentInfo: { flex: 1 },
   recentTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
   recentCat: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  securityBar: {
+    marginHorizontal: 20,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#00D4FF40",
+    backgroundColor: "#060B18",
+    marginBottom: 12,
+  },
+  securityBarInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+  },
+  securityBarLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  securityPulse: { width: 7, height: 7, borderRadius: 4 },
+  securityBarTitle: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 2,
+  },
+  securityBarSub: { color: "#8896B0", fontSize: 11, fontFamily: "Inter_400Regular" },
   networkCTA: {
     marginHorizontal: 20,
     borderRadius: 16,
@@ -382,45 +433,5 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     marginBottom: 2,
   },
-  networkCTASub: {
-    color: "#8896B0",
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
-  securityBar: {
-    marginHorizontal: 20,
-    borderRadius: 14,
-    borderWidth: 1,
-    backgroundColor: "#060B18",
-    marginBottom: 12,
-  },
-  securityBarInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 14,
-    gap: 10,
-  },
-  securityBarLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  securityPulse: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  securityBarTitle: {
-    color: "#fff",
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    marginBottom: 2,
-  },
-  securityBarSub: {
-    color: "#8896B0",
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-  },
+  networkCTASub: { color: "#8896B0", fontSize: 12, fontFamily: "Inter_400Regular" },
 });

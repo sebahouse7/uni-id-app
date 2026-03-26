@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "GhX3Ca6HGehMoCql7YCgZ"
+uri = "file://documentos/declaracion_autoria_uni_id.md"
+type = "text"
+title = "Declaración de Autoría — uni.id (Sebastián Monteleón)"
