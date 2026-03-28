@@ -3,6 +3,7 @@ import { body, validationResult } from "express-validator";
 import { query, queryOne } from "../lib/db";
 import { signAccessToken, signRefreshToken, rotateRefreshToken, revokeAllUserTokens } from "../lib/jwt";
 import { hashDeviceId } from "../lib/crypto";
+import { hashEmail, encryptFieldAsync } from "../lib/keyManager";
 import { log } from "../lib/audit";
 import { recordFailedAttempt, raiseSecurityEvent } from "../lib/monitor";
 import { requireAuth } from "../middlewares/auth";
@@ -33,10 +34,11 @@ router.post(
     body("deviceId").isString().isLength({ min: 16, max: 256 }).trim(),
     body("name").isString().isLength({ min: 1, max: 100 }).trim().escape(),
     body("bio").optional().isString().isLength({ max: 300 }).trim().escape(),
+    body("recoveryEmail").optional().isEmail().normalizeEmail(),
   ],
   async (req: Request, res: Response) => {
     if (!validate(req, res)) return;
-    const { deviceId, name, bio } = req.body;
+    const { deviceId, name, bio, recoveryEmail } = req.body;
     const ip = req.ip ?? "unknown";
     const ua = req.headers["user-agent"];
     const deviceMeta = getDeviceMeta(req);
@@ -58,7 +60,16 @@ router.post(
         );
         user = rows[0];
         isNew = true;
-        await log({ userId: user.id, event: "auth.register", ip, userAgent: ua, metadata: { platform: deviceMeta.devicePlatform } });
+        // Optionally store recovery email at registration
+        if (recoveryEmail) {
+          const emailHash = hashEmail(recoveryEmail);
+          const emailEnc = await encryptFieldAsync(recoveryEmail, user.id);
+          await query(
+            `UPDATE uni_users SET recovery_email_enc = $1, recovery_email_hash = $2 WHERE id = $3`,
+            [emailEnc, emailHash, user.id]
+          );
+        }
+        await log({ userId: user.id, event: "auth.register", ip, userAgent: ua, metadata: { platform: deviceMeta.devicePlatform, hasRecoveryEmail: !!recoveryEmail } });
       } else {
         await log({ userId: user.id, event: "auth.login", ip, userAgent: ua, metadata: { platform: deviceMeta.devicePlatform } });
       }

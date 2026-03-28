@@ -1,61 +1,68 @@
 import { Router, Request, Response } from "express";
 import { body, param, validationResult } from "express-validator";
 import { query, queryOne } from "../lib/db";
-import { encryptField, decryptField } from "../lib/crypto";
+import { encryptFieldAsync, decryptFieldAsync } from "../lib/keyManager";
 import { log } from "../lib/audit";
+import { raiseSecurityEvent } from "../lib/monitor";
 import { requireAuth } from "../middlewares/auth";
+import { verifyOwnership } from "../middlewares/ownershipCheck";
 
 const router = Router();
-
 router.use(requireAuth);
 
 const validate = (req: Request, res: Response): boolean => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    res.status(400).json({ errors: errors.array() });
-    return false;
-  }
+  if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return false; }
   return true;
 };
 
 const ALLOWED_CATEGORIES = ["identity","education","health","driving","property","pets","other"];
 
-function encryptDoc(doc: any, userId: string) {
-  return {
-    description_enc: doc.description ? encryptField(doc.description, userId) : null,
-    file_uri_enc: doc.fileUri ? encryptField(doc.fileUri, userId) : null,
-    file_name_enc: doc.fileName ? encryptField(doc.fileName, userId) : null,
-  };
+async function encryptDoc(doc: { description?: string; fileUri?: string; fileName?: string }, userId: string) {
+  const [description_enc, file_uri_enc, file_name_enc] = await Promise.all([
+    doc.description ? encryptFieldAsync(doc.description, userId) : Promise.resolve(null),
+    doc.fileUri ? encryptFieldAsync(doc.fileUri, userId) : Promise.resolve(null),
+    doc.fileName ? encryptFieldAsync(doc.fileName, userId) : Promise.resolve(null),
+  ]);
+  return { description_enc, file_uri_enc, file_name_enc };
 }
 
-function decryptDoc(row: any, userId: string) {
+async function decryptDoc(row: any, userId: string) {
+  const [description, fileUri, fileName] = await Promise.all([
+    row.description_enc ? decryptFieldAsync(row.description_enc, userId).catch(() => null) : Promise.resolve(null),
+    row.file_uri_enc ? decryptFieldAsync(row.file_uri_enc, userId).catch(() => null) : Promise.resolve(null),
+    row.file_name_enc ? decryptFieldAsync(row.file_name_enc, userId).catch(() => null) : Promise.resolve(null),
+  ]);
   return {
     id: row.id,
     title: row.title,
     category: row.category,
-    description: row.description_enc ? decryptField(row.description_enc, userId) : null,
-    fileUri: row.file_uri_enc ? decryptField(row.file_uri_enc, userId) : null,
-    fileName: row.file_name_enc ? decryptField(row.file_name_enc, userId) : null,
+    description,
+    fileUri,
+    fileName,
     tags: row.tags ?? [],
+    keyVersion: row.key_version ?? 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-// GET all documents
+// GET all documents — user_id filter is ALWAYS enforced in SQL
 router.get("/", async (req: Request, res: Response) => {
+  const userId = req.user!.sub;
   const rows = await query(
     `SELECT * FROM uni_documents WHERE user_id = $1 ORDER BY updated_at DESC`,
-    [req.user!.sub]
+    [userId]
   );
-  const docs = rows.map((r) => decryptDoc(r, req.user!.sub));
+  const docs = await Promise.all(rows.map((r) => decryptDoc(r, userId)));
   res.json(docs);
 });
 
-// GET one document
+// GET one document — ownership verified by middleware before handler runs
 router.get(
   "/:id",
   [param("id").isUUID()],
+  verifyOwnership("uni_documents"),
   async (req: Request, res: Response) => {
     if (!validate(req, res)) return;
     const row = await queryOne(
@@ -63,7 +70,7 @@ router.get(
       [req.params.id, req.user!.sub]
     );
     if (!row) { res.status(404).json({ error: "Documento no encontrado" }); return; }
-    res.json(decryptDoc(row, req.user!.sub));
+    res.json(await decryptDoc(row, req.user!.sub));
   }
 );
 
@@ -73,7 +80,7 @@ router.post(
   [
     body("title").isString().isLength({ min: 1, max: 200 }).trim().escape(),
     body("category").isIn(ALLOWED_CATEGORIES),
-    body("description").optional().isString().isLength({ max: 2000 }),
+    body("description").optional().isString().isLength({ max: 5000 }),
     body("fileUri").optional().isString().isLength({ max: 2000 }),
     body("fileName").optional().isString().isLength({ max: 500 }),
     body("tags").optional().isArray({ max: 10 }),
@@ -82,30 +89,31 @@ router.post(
     if (!validate(req, res)) return;
     const { title, category, description, fileUri, fileName, tags } = req.body;
     const userId = req.user!.sub;
-    const enc = encryptDoc({ description, fileUri, fileName }, userId);
+    const enc = await encryptDoc({ description, fileUri, fileName }, userId);
 
     const [row] = await query(
-      `INSERT INTO uni_documents (user_id, title, category, description_enc, file_uri_enc, file_name_enc, tags)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      `INSERT INTO uni_documents (user_id, title, category, description_enc, file_uri_enc, file_name_enc, tags, key_version)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,1) RETURNING *`,
       [userId, title, category, enc.description_enc, enc.file_uri_enc, enc.file_name_enc, tags ?? []]
     );
     await log({ userId, event: "document.created", ip: req.ip, metadata: { category } });
-    res.status(201).json(decryptDoc(row, userId));
+    res.status(201).json(await decryptDoc(row, userId));
   }
 );
 
-// PATCH update document
+// PATCH update document — ownership verified by middleware
 router.patch(
   "/:id",
-  requireAuth,
   [
     param("id").isUUID(),
     body("title").optional().isString().isLength({ min: 1, max: 200 }).trim().escape(),
     body("category").optional().isIn(ALLOWED_CATEGORIES),
-    body("description").optional().isString().isLength({ max: 2000 }),
+    body("description").optional().isString().isLength({ max: 5000 }),
     body("fileUri").optional().isString().isLength({ max: 2000 }),
     body("fileName").optional().isString().isLength({ max: 500 }),
+    body("tags").optional().isArray({ max: 10 }),
   ],
+  verifyOwnership("uni_documents"),
   async (req: Request, res: Response) => {
     if (!validate(req, res)) return;
     const userId = req.user!.sub;
@@ -116,12 +124,22 @@ router.patch(
     if (!existing) { res.status(404).json({ error: "Documento no encontrado" }); return; }
 
     const { title, category, description, fileUri, fileName, tags } = req.body;
-    const enc = encryptDoc(
-      {
-        description: description !== undefined ? description : (existing.description_enc ? decryptField(existing.description_enc, userId) : null),
-        fileUri: fileUri !== undefined ? fileUri : (existing.file_uri_enc ? decryptField(existing.file_uri_enc, userId) : null),
-        fileName: fileName !== undefined ? fileName : (existing.file_name_enc ? decryptField(existing.file_name_enc, userId) : null),
-      },
+
+    // Decrypt existing values if not being updated
+    const getField = async (newVal: string | undefined, encField: string | null) => {
+      if (newVal !== undefined) return newVal;
+      if (encField) return decryptFieldAsync(encField, userId).catch(() => null);
+      return null;
+    };
+
+    const [descVal, uriVal, nameVal] = await Promise.all([
+      getField(description, existing.description_enc),
+      getField(fileUri, existing.file_uri_enc),
+      getField(fileName, existing.file_name_enc),
+    ]);
+
+    const enc = await encryptDoc(
+      { description: descVal ?? undefined, fileUri: uriVal ?? undefined, fileName: nameVal ?? undefined },
       userId
     );
 
@@ -138,14 +156,15 @@ router.patch(
       [title ?? null, category ?? null, enc.description_enc, enc.file_uri_enc, enc.file_name_enc, tags ?? null, req.params.id, userId]
     );
     await log({ userId, event: "document.updated", ip: req.ip });
-    res.json(decryptDoc(row, userId));
+    res.json(await decryptDoc(row, userId));
   }
 );
 
-// DELETE document
+// DELETE document — ownership verified by middleware
 router.delete(
   "/:id",
   [param("id").isUUID()],
+  verifyOwnership("uni_documents"),
   async (req: Request, res: Response) => {
     if (!validate(req, res)) return;
     const userId = req.user!.sub;

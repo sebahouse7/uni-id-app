@@ -6,11 +6,13 @@ import subscriptionsRouter from "./subscriptions";
 import sessionsRouter from "./sessions";
 import monitorRouter from "./monitor";
 import backupRouter from "./backup";
+import recoveryRouter from "./recovery";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/auth", authRouter);
+router.use("/recovery", recoveryRouter);
 router.use("/documents", documentsRouter);
 router.use("/subscriptions", subscriptionsRouter);
 router.use("/sessions", sessionsRouter);

@@ -123,4 +123,12 @@ Expo React Native mobile app — **uni.id** by human.id labs S.A.S. (Sebastián 
 
 **Security middleware:** Helmet (security headers), express-rate-limit (300 req/15min global, 20 req/15min auth), express-validator (all inputs), raw body for webhook signature verification
 
-**Vulnerability status:** 0 critical, 0 high — all high CVEs patched via pnpm overrides (picomatch >=4.0.4, path-to-regexp >=8.4.0)
+**Recovery system:** `/api/recovery/request` (OTP via email) + `/api/recovery/verify` (verify OTP → new tokens). Email stored encrypted (AES-256) + hashed (SHA-256) for lookup. OTPs stored as bcrypt hash, single-use, 10-min expiry, 3 max attempts. Anti-enumeration (generic responses).
+
+**Key wrapping (DEK system):** `src/lib/keyManager.ts` — each user has a random 256-bit DEK (Data Encryption Key). DEK stored wrapped (AES-256-GCM encrypted) by server master key in `uni_user_keys`. Documents encrypted with DEK. Key rotation = re-wrap DEK only, no document re-encryption. Recovery doesn't break encryption because keys are server-side.
+
+**Ownership middleware:** `src/middlewares/ownershipCheck.ts` — `verifyOwnership(table)` applied to every resource route. Cross-user access attempts trigger a `critical` audit event + `critical` security event in DB.
+
+**Persistent security logs:** `uni_audit_logs` (all operations), `uni_security_events` (security incidents). Both queryable via `/api/monitor/my-activity` and `/api/monitor/security-events` with filters (severity, event, from, to, limit).
+
+**Vulnerability status:** 0 critical, 0 high, 1 moderate (esbuild in drizzle-kit dev tool only, not in production path)
