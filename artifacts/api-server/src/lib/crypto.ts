@@ -44,22 +44,42 @@ export function generateSecureToken(bytes = 32): string {
   return randomBytes(bytes).toString("hex");
 }
 
+/**
+ * Verifica la firma HMAC-SHA256 de un webhook de MercadoPago.
+ *
+ * MP envía la cabecera:  x-signature: ts=1234567890,v1=<hex>
+ * El template firmado es: id:{dataId};request-id:{xRequestId};ts:{ts};
+ *
+ * El secret es MP_WEBHOOK_SECRET (configurable en el Developer Dashboard de MP),
+ * completamente distinto del MP_ACCESS_TOKEN.
+ */
 export function verifyMercadoPagoSignature(
-  rawBody: string,
+  dataId: string,
   xSignature: string,
   xRequestId: string,
-  secret: string
+  webhookSecret: string
 ): boolean {
   try {
     const parts = xSignature.split(",");
     const tsEntry = parts.find((p) => p.startsWith("ts="));
     const v1Entry = parts.find((p) => p.startsWith("v1="));
     if (!tsEntry || !v1Entry) return false;
+
     const ts = tsEntry.split("=")[1];
     const v1 = v1Entry.split("=")[1];
-    const template = `id:${xRequestId};request-id:${xRequestId};ts:${ts};`;
-    const expected = createHmac("sha256", secret).update(template).digest("hex");
-    return expected === v1;
+    if (!ts || !v1) return false;
+
+    // Template exacto según docs de MercadoPago
+    const template = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+    const expected = createHmac("sha256", webhookSecret).update(template).digest("hex");
+
+    // Comparación de tiempo constante
+    if (expected.length !== v1.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) {
+      diff |= expected.charCodeAt(i) ^ v1.charCodeAt(i);
+    }
+    return diff === 0;
   } catch {
     return false;
   }

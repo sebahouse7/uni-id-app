@@ -1,8 +1,8 @@
 import { Router, Request, Response } from "express";
-import { query as dbQuery } from "express-validator";
 import { requireAuth } from "../middlewares/auth";
 import { getSecuritySummary, cleanExpiredAttempts } from "../lib/monitor";
 import { query, queryOne } from "../lib/db";
+import { testSmtpConnection, sendEmail, buildRecoveryEmail } from "../lib/email";
 
 const router = Router();
 
@@ -10,10 +10,59 @@ const router = Router();
 router.get("/health", async (_req, res: Response) => {
   try {
     await query("SELECT 1");
-    res.json({ status: "ok", db: "connected", timestamp: new Date().toISOString() });
+    res.json({
+      status: "ok",
+      db: "connected",
+      timestamp: new Date().toISOString(),
+      services: {
+        mercadopago: !!process.env["MP_ACCESS_TOKEN"],
+        stripe: !!process.env["STRIPE_SECRET_KEY"],
+        smtp: !!(process.env["SMTP_HOST"] && process.env["SMTP_USER"] && process.env["SMTP_PASS"]),
+        webhookSignature: !!process.env["MP_WEBHOOK_SECRET"],
+      },
+    });
   } catch {
     res.status(503).json({ status: "error", db: "disconnected", timestamp: new Date().toISOString() });
   }
+});
+
+// ─── Email configuration test (authenticated) ─────────────────────────────────
+router.get("/email-test", requireAuth, async (req: any, res: Response) => {
+  const result = await testSmtpConnection();
+  res.json({
+    smtp: result,
+    configured: result.configured,
+    recommendation: result.configured
+      ? result.ok
+        ? "SMTP listo para producción"
+        : `SMTP configurado pero la conexión falló: ${result.error}`
+      : "Configura SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM para envío real de emails",
+  });
+});
+
+// ─── Send a test email (authenticated, dev only) ──────────────────────────────
+router.post("/email-test", requireAuth, async (req: any, res: Response) => {
+  if (process.env["NODE_ENV"] === "production") {
+    res.status(403).json({ error: "No disponible en producción" });
+    return;
+  }
+  const userId = req.user!.sub;
+  const user = await queryOne<{ name: string }>(
+    `SELECT name FROM uni_users WHERE id = $1`, [userId]
+  );
+  const target = req.body?.email ?? req.body?.to;
+  if (!target) { res.status(400).json({ error: "Campo 'email' requerido" }); return; }
+
+  const content = buildRecoveryEmail("123456", req.body?.lang ?? "es");
+  const result = await sendEmail({ to: target, ...content });
+
+  res.json({
+    sent: result.sent,
+    target,
+    smtpConfigured: result.sent || !result.previewCode,
+    devCode: result.previewCode ? "123456" : undefined,
+    error: result.error,
+  });
 });
 
 // ─── Security dashboard (authenticated) ──────────────────────────────────────
