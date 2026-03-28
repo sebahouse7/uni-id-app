@@ -34,3 +34,15 @@ channel = "stable-25_05"
 ENCRYPTION_MASTER_KEY = "d90587df8981e91b651337a0b433aab56cf341ebc0e35285fea5590373852784"
 JWT_ACCESS_SECRET = "af9dabf4682eb0e906344750ac21484f27bd2678548cd482b70aa5efff01477c4405f5aa2876faaa49fae1c120bc1c98caa68b21c6712f6c938626c7c3c20208"
 JWT_REFRESH_SECRET = "f664def650cd44d74f716bc645bcf145a84e7ac4502c790a9f7019ce6da23c0720af0833e79f0b0266d2c589c89b14ebf7eafa5f472e5e95a98b9b912aa4296d"
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 24796
+externalPort = 3000
