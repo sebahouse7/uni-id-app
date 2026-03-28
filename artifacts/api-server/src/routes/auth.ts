@@ -4,6 +4,7 @@ import { query, queryOne } from "../lib/db";
 import { signAccessToken, signRefreshToken, rotateRefreshToken, revokeAllUserTokens } from "../lib/jwt";
 import { hashDeviceId } from "../lib/crypto";
 import { log } from "../lib/audit";
+import { recordFailedAttempt, raiseSecurityEvent } from "../lib/monitor";
 import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
@@ -17,18 +18,28 @@ const validate = (req: Request, res: Response): boolean => {
   return true;
 };
 
+function getDeviceMeta(req: Request) {
+  return {
+    deviceName: (req.headers["x-device-name"] as string) ?? "Desconocido",
+    devicePlatform: (req.headers["x-device-platform"] as string) ?? "unknown",
+    deviceIp: req.ip ?? "unknown",
+  };
+}
+
 // Register or login via device ID
 router.post(
   "/register",
   [
     body("deviceId").isString().isLength({ min: 16, max: 256 }).trim(),
     body("name").isString().isLength({ min: 1, max: 100 }).trim().escape(),
+    body("bio").optional().isString().isLength({ max: 300 }).trim().escape(),
   ],
   async (req: Request, res: Response) => {
     if (!validate(req, res)) return;
     const { deviceId, name, bio } = req.body;
     const ip = req.ip ?? "unknown";
     const ua = req.headers["user-agent"];
+    const deviceMeta = getDeviceMeta(req);
 
     try {
       const hashedDevice = hashDeviceId(deviceId);
@@ -37,6 +48,7 @@ router.post(
         [hashedDevice]
       );
 
+      let isNew = false;
       if (!user) {
         const rows = await query<{ id: string; name: string; network_plan: string }>(
           `INSERT INTO uni_users (device_id, name, bio, network_plan)
@@ -45,16 +57,18 @@ router.post(
           [hashedDevice, name, bio ?? null]
         );
         user = rows[0];
-        await log({ userId: user.id, event: "auth.register", ip, userAgent: ua });
+        isNew = true;
+        await log({ userId: user.id, event: "auth.register", ip, userAgent: ua, metadata: { platform: deviceMeta.devicePlatform } });
       } else {
-        await log({ userId: user.id, event: "auth.login", ip, userAgent: ua });
+        await log({ userId: user.id, event: "auth.login", ip, userAgent: ua, metadata: { platform: deviceMeta.devicePlatform } });
       }
 
       const accessToken = signAccessToken(user.id, hashedDevice);
-      const refreshToken = await signRefreshToken(user.id);
+      const refreshToken = await signRefreshToken(user.id, deviceMeta);
 
-      res.json({ accessToken, refreshToken, user });
+      res.json({ accessToken, refreshToken, user, isNew });
     } catch (err: any) {
+      await recordFailedAttempt(ip, "/auth/register");
       await log({ event: "auth.register_error", severity: "warn", ip, metadata: { error: err.message } });
       res.status(500).json({ error: "Error al registrar" });
     }
@@ -64,16 +78,29 @@ router.post(
 // Refresh access token
 router.post("/refresh", async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
+  const ip = req.ip ?? "unknown";
+
   if (!refreshToken || typeof refreshToken !== "string") {
     res.status(400).json({ error: "refreshToken requerido" });
     return;
   }
-  const result = await rotateRefreshToken(refreshToken);
+
+  const deviceMeta = getDeviceMeta(req);
+  const result = await rotateRefreshToken(refreshToken, deviceMeta);
+
   if (!result) {
+    await recordFailedAttempt(ip, "/auth/refresh");
+    await raiseSecurityEvent({
+      eventType: "refresh_token_invalid",
+      severity: "warn",
+      ip,
+      metadata: { hint: "Possible stolen token attempt" },
+    });
     res.status(401).json({ error: "Token inválido o expirado" });
     return;
   }
-  await log({ userId: result.userId, event: "auth.token_refreshed", ip: req.ip });
+
+  await log({ userId: result.userId, event: "auth.token_refreshed", ip });
   res.json({ accessToken: result.accessToken, refreshToken: result.newRefresh });
 });
 
