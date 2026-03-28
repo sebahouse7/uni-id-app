@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { secureGet, secureSet } from "./SecureStorage";
 import React, {
   createContext,
   useCallback,
@@ -71,8 +71,8 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const [rawNode, rawDocs] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEY_NODE),
-          AsyncStorage.getItem(STORAGE_KEY_DOCS),
+          secureGet(STORAGE_KEY_NODE),
+          secureGet(STORAGE_KEY_DOCS),
         ]);
         if (rawNode) setNode(JSON.parse(rawNode));
         if (rawDocs) setDocuments(JSON.parse(rawDocs));
@@ -85,12 +85,12 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const saveNode = async (n: IdentityNode) => {
-    await AsyncStorage.setItem(STORAGE_KEY_NODE, JSON.stringify(n));
+    await secureSet(STORAGE_KEY_NODE, JSON.stringify(n));
     setNode(n);
   };
 
   const saveDocs = async (docs: Document[]) => {
-    await AsyncStorage.setItem(STORAGE_KEY_DOCS, JSON.stringify(docs));
+    await secureSet(STORAGE_KEY_DOCS, JSON.stringify(docs));
     setDocuments(docs);
   };
 

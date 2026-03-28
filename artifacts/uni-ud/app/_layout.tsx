@@ -14,6 +14,8 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { LockScreen } from "@/components/LockScreen";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { IdentityProvider } from "@/context/IdentityContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 
@@ -22,6 +24,12 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <LockScreen />;
+  }
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -54,13 +62,15 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <LanguageProvider>
-            <IdentityProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
-                  <RootLayoutNav />
-                </KeyboardProvider>
-              </GestureHandlerRootView>
-            </IdentityProvider>
+            <AuthProvider>
+              <IdentityProvider>
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                  <KeyboardProvider>
+                    <RootLayoutNav />
+                  </KeyboardProvider>
+                </GestureHandlerRootView>
+              </IdentityProvider>
+            </AuthProvider>
           </LanguageProvider>
         </QueryClientProvider>
       </ErrorBoundary>

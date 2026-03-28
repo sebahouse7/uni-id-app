@@ -58,6 +58,9 @@
   "dependencies": {
     "expo-document-picker": "^14.0.8",
     "expo-file-system": "^19.0.21",
+    "expo-local-authentication": "17.0.8",
+    "expo-localization": "17.0.8",
+    "expo-secure-store": "15.0.8",
     "expo-sharing": "^14.0.8"
   }
 }
