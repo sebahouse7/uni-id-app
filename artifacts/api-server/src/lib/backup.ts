@@ -1,5 +1,5 @@
 import { query } from "./db";
-import { encryptField, decryptField } from "./crypto";
+import { decryptFieldAsync } from "./keyManager";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
 
 const BACKUP_ALGORITHM = "aes-256-gcm";
@@ -19,26 +19,37 @@ export async function generateEncryptedBackup(
     [userId]
   );
 
-  const decryptedDocs = docs.map((doc) => ({
-    id: doc.id,
-    title: doc.title,
-    category: doc.category,
-    description: doc.description_enc ? decryptField(doc.description_enc, userId) : null,
-    fileUri: doc.file_uri_enc ? decryptField(doc.file_uri_enc, userId) : null,
-    fileName: doc.file_name_enc ? decryptField(doc.file_name_enc, userId) : null,
-    tags: doc.tags,
-    createdAt: doc.created_at,
-    updatedAt: doc.updated_at,
-  }));
+  // Decrypt each field using the user's DEK (async, parallel per doc)
+  const decryptedDocs = await Promise.all(
+    docs.map(async (doc) => ({
+      id: doc.id,
+      title: doc.title,
+      category: doc.category,
+      description: doc.description_enc
+        ? await decryptFieldAsync(doc.description_enc, userId).catch(() => null)
+        : null,
+      fileUri: doc.file_uri_enc
+        ? await decryptFieldAsync(doc.file_uri_enc, userId).catch(() => null)
+        : null,
+      fileName: doc.file_name_enc
+        ? await decryptFieldAsync(doc.file_name_enc, userId).catch(() => null)
+        : null,
+      tags: doc.tags,
+      createdAt: doc.created_at,
+      updatedAt: doc.updated_at,
+    }))
+  );
 
   const payload = JSON.stringify({
-    version: "1.0",
+    version: "2.0",
     userId,
     user: user[0],
     documents: decryptedDocs,
     exportedAt: new Date().toISOString(),
+    documentCount: decryptedDocs.length,
   });
 
+  // Encrypt the backup payload with the user-provided PIN (scrypt KDF)
   const salt = randomBytes(32);
   const iv = randomBytes(16);
   const key = scryptSync(userPin, salt, 32);
@@ -46,8 +57,7 @@ export async function generateEncryptedBackup(
   const encrypted = Buffer.concat([cipher.update(payload, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
 
-  const combined = Buffer.concat([salt, iv, tag, encrypted]);
-  return combined.toString("base64");
+  return Buffer.concat([salt, iv, tag, encrypted]).toString("base64");
 }
 
 export async function decryptBackup(
