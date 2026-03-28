@@ -94,3 +94,33 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+
+### `artifacts/uni-ud` (`@workspace/uni-ud`)
+
+Expo React Native mobile app — **uni.id** by human.id labs S.A.S. (Sebastián Maximiliano Monteleón, DNI 32.725.461).
+
+**Security architecture (fintech-grade):**
+- `lib/apiClient.ts` — Authenticated HTTP client with JWT auto-refresh, SecureStore for tokens
+- `context/AuthContext.tsx` — Biometric (Face ID/fingerprint) + 6-digit PIN, auto-lock 3 min
+- `context/SecureStorage.ts` — AES-GCM encrypted local storage via expo-secure-store (iOS Keychain / Android Keystore)
+- `context/IdentityContext.tsx` — Document management with backend sync
+- `context/LanguageContext.tsx` — Multi-language ES/EN/PT, device locale auto-detection
+- `components/LockScreen.tsx` — Security lock screen
+
+**Backend security (api-server):**
+- `src/lib/crypto.ts` — AES-256-GCM encryption with per-user derived keys (HMAC-SHA256), MercadoPago signature verification
+- `src/lib/jwt.ts` — JWT access tokens (15 min) + rotating refresh tokens (30 days), stored hashed in DB
+- `src/lib/audit.ts` — Full audit log of all security events in `uni_audit_logs` table
+- `src/lib/db.ts` — PostgreSQL connection pool with connection limits
+- `src/middlewares/auth.ts` — JWT Bearer token middleware
+- `src/routes/auth.ts` — Register/login by device ID, refresh, logout, profile
+- `src/routes/documents.ts` — CRUD with AES-256 encryption per field, auth required
+- `src/routes/subscriptions.ts` — MercadoPago + Stripe with webhook signature verification, DB activation
+
+**Database tables:** `uni_users`, `uni_documents`, `uni_audit_logs`, `uni_subscriptions`, `uni_refresh_tokens`
+
+**Env vars required:** `ENCRYPTION_MASTER_KEY`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`, `MP_ACCESS_TOKEN` (optional), `STRIPE_SECRET_KEY` (optional)
+
+**Security middleware:** Helmet (security headers), express-rate-limit (300 req/15min global, 20 req/15min auth), express-validator (all inputs), raw body for webhook signature verification
+
+**Vulnerability status:** 0 critical, 0 high — all high CVEs patched via pnpm overrides (picomatch >=4.0.4, path-to-regexp >=8.4.0)
