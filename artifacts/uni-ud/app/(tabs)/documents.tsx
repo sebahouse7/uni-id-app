@@ -139,11 +139,18 @@ export default function DocumentsScreen() {
             {documents.length !== 1 ? "s" : ""}
           </Text>
         </View>
-        <AnimatedPressable onPress={() => router.push("/add-document")} scale={0.9}>
-          <View style={[styles.addBtn, { backgroundColor: colors.tint }, Shadows.colored(colors.tint)]}>
-            <Feather name="plus" size={20} color="#fff" />
-          </View>
-        </AnimatedPressable>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <AnimatedPressable onPress={() => router.push("/share" as any)} scale={0.9}>
+            <View style={[styles.addBtn, { backgroundColor: colors.backgroundCard, borderColor: colors.border, borderWidth: 1 }]}>
+              <Feather name="share-2" size={18} color={colors.text} />
+            </View>
+          </AnimatedPressable>
+          <AnimatedPressable onPress={() => router.push("/add-document")} scale={0.9}>
+            <View style={[styles.addBtn, { backgroundColor: colors.tint }, Shadows.colored(colors.tint)]}>
+              <Feather name="plus" size={20} color="#fff" />
+            </View>
+          </AnimatedPressable>
+        </View>
       </View>
 
       {/* Search bar */}

@@ -3,9 +3,10 @@ import * as WebBrowser from "expo-web-browser";
 import { getLocales } from "expo-localization";
 import { Platform } from "react-native";
 
-const API_BASE = process.env["EXPO_PUBLIC_DOMAIN"]
-  ? `https://${process.env["EXPO_PUBLIC_DOMAIN"]}/api-server/api`
-  : "http://localhost:8080/api";
+import {
+  apiCreateMercadoPagoCheckout,
+  apiCreateStripeCheckout,
+} from "./apiClient";
 
 export type PlanId = "basic" | "pro";
 export type PaymentRegion = "latam" | "global";
@@ -26,7 +27,8 @@ export function detectPaymentRegion(): PaymentRegion {
 
 export async function checkPaymentConfig(): Promise<{ mercadopago: boolean; stripe: boolean }> {
   try {
-    const res = await fetch(`${API_BASE}/subscriptions/status`);
+    const base = process.env["EXPO_PUBLIC_API_URL"] ?? "/api";
+    const res = await fetch(`${base}/subscriptions/status`);
     if (!res.ok) return { mercadopago: false, stripe: false };
     return res.json();
   } catch {
@@ -36,18 +38,16 @@ export async function checkPaymentConfig(): Promise<{ mercadopago: boolean; stri
 
 export async function createMercadoPagoCheckout(
   planId: PlanId,
-  userId: string
+  _userId: string
 ): Promise<{ url: string | null; error?: string }> {
   try {
-    const backUrl = Linking.createURL("payment-result");
-    const res = await fetch(`${API_BASE}/subscriptions/mercadopago/create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planId, userId, backUrl }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { url: null, error: data.error };
-    return { url: data.initPoint ?? data.sandboxInitPoint };
+    const backUrl =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : Linking.createURL("payment-result");
+    const data = await apiCreateMercadoPagoCheckout(planId, backUrl);
+    const url = data.sandboxInitPoint ?? data.initPoint ?? null;
+    return { url };
   } catch (e: any) {
     return { url: null, error: e.message };
   }
@@ -55,17 +55,11 @@ export async function createMercadoPagoCheckout(
 
 export async function createStripeCheckout(
   planId: PlanId,
-  userId: string
+  _userId: string
 ): Promise<{ url: string | null; error?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/subscriptions/stripe/create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planId, userId }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { url: null, error: data.error };
-    return { url: data.url };
+    const data = await apiCreateStripeCheckout(planId);
+    return { url: data.url ?? null };
   } catch (e: any) {
     return { url: null, error: e.message };
   }
@@ -73,18 +67,18 @@ export async function createStripeCheckout(
 
 export async function openPaymentBrowser(url: string): Promise<PaymentStatus> {
   try {
+    if (Platform.OS === "web") {
+      window.open(url, "_blank");
+      return "pending";
+    }
     const result = await WebBrowser.openBrowserAsync(url, {
       dismissButtonStyle: "cancel",
       presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
     });
-    if (result.type === "cancel" || result.type === "dismiss") {
-      return "cancelled";
-    }
+    if (result.type === "cancel" || result.type === "dismiss") return "cancelled";
     return "pending";
   } catch {
-    if (Platform.OS !== "web") {
-      await Linking.openURL(url);
-    }
+    if (Platform.OS !== "web") await Linking.openURL(url);
     return "pending";
   }
 }

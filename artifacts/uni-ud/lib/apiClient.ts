@@ -246,3 +246,46 @@ export async function isLoggedIn(): Promise<boolean> {
   const token = await getAccessToken();
   return !!token;
 }
+
+// ─── Share / Identidad compartida ─────────────────────────────────────────────
+export async function apiShareCreate(opts: {
+  documentIds: string[];
+  label?: string;
+  expiresInMinutes: number;
+}): Promise<{ token: string; url: string; expiresAt: string }> {
+  const res = await authFetch("/share/create", {
+    method: "POST",
+    body: JSON.stringify(opts),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Error al crear enlace");
+  }
+  return res.json();
+}
+
+export async function apiShareHistory(): Promise<any[]> {
+  const res = await authFetch("/share/history");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function apiShareRevoke(token: string): Promise<void> {
+  await authFetch(`/share/${token}`, { method: "DELETE" });
+}
+
+export async function apiShareView(token: string): Promise<{
+  label: string | null;
+  owner: { name: string };
+  documents: any[];
+  expiresAt: string;
+  accessCount: number;
+}> {
+  const base = process.env["EXPO_PUBLIC_API_URL"] ?? "/api";
+  const res = await fetch(`${base}/share/${token}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Enlace inválido o expirado");
+  }
+  return res.json();
+}

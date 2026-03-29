@@ -36,6 +36,8 @@ function RootLayoutNav() {
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="document/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="add-document" options={{ headerShown: false }} />
+      <Stack.Screen name="share" options={{ headerShown: false, presentation: "modal" }} />
+      <Stack.Screen name="shared/[token]" options={{ headerShown: false }} />
     </Stack>
   );
 }

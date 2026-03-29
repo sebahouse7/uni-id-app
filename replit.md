@@ -14,13 +14,28 @@ Mobile identity wallet app built with Expo React Native.
 
 ### Screens Redesigned
 - `app/(tabs)/index.tsx` — Dashboard: gradient hero card, animated mount, 2-col category grid
-- `app/(tabs)/documents.tsx` — Premium search bar, chip filters with counts, card shadows
+- `app/(tabs)/documents.tsx` — Premium search bar, chip filters with counts, share button
 - `app/(tabs)/profile.tsx` — Gradient hero section, plan badges, category breakdown
-- `app/(tabs)/network.tsx` — Gradient plan cards, LinearGradient CTA button
+- `app/(tabs)/network.tsx` — Gradient plan cards, MercadoPago/Stripe working checkout
 - `app/(tabs)/security.tsx` — Live viz with LinearGradient, animated threat bar, activity feed
 - `app/(tabs)/_layout.tsx` — Cleaner tab bar with iOS SF Symbols / Feather icons
 - `app/onboarding.tsx` — Gradient slide icons, animated scale transitions, trust badge
 - `components/LockScreen.tsx` — Gradient logo icon, premium keypad UI
+
+### QR Share system
+- Backend: `routes/share.ts` — POST /share/create, GET /share/:token (public), DELETE /share/:token (revoke), GET /share/history
+- DB table: `uni_share_tokens` (id TEXT, user_id UUID, document_ids TEXT[], expires_at, revoked, access_count)
+- Frontend: `app/share.tsx` — select docs, pick expiry (5min/1h/24h/7d), generate QR, copy/share link, history
+- Frontend: `app/shared/[token].tsx` — public branded identity view (no auth required)
+- QR generation: `react-native-qrcode-svg`
+
+### Session persistence (web + native)
+- `lib/apiClient.ts` — tokens in localStorage (web) / SecureStore (native)
+- `context/IdentityContext.tsx` — device ID persisted in localStorage on web; session validation on startup clears cache on expiry
+
+### Payments
+- `lib/payments.ts` — MercadoPago + Stripe checkout via authenticated API calls
+- Backend: full webhook handling for MP + Stripe (activate/reject/refund → email notification)
 
 # Workspace
 

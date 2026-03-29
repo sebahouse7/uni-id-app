@@ -7,6 +7,7 @@ import sessionsRouter from "./sessions";
 import monitorRouter from "./monitor";
 import backupRouter from "./backup";
 import recoveryRouter from "./recovery";
+import shareRouter from "./share";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use("/subscriptions", subscriptionsRouter);
 router.use("/sessions", sessionsRouter);
 router.use("/monitor", monitorRouter);
 router.use("/backup", backupRouter);
+router.use("/share", shareRouter);
 
 export default router;
