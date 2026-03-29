@@ -473,6 +473,14 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   upgradeCTASub: { color: "#8896B0", fontSize: 12, fontFamily: "Inter_400Regular" },
+  langRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+  },
+  langFlag: { fontSize: 22 },
+  langLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
   companyFooter: {
     alignItems: "center",
     paddingVertical: 28,
