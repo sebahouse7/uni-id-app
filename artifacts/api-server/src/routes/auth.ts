@@ -4,9 +4,10 @@ import { query, queryOne } from "../lib/db";
 import { signAccessToken, signRefreshToken, rotateRefreshToken, revokeAllUserTokens } from "../lib/jwt";
 import { hashDeviceId } from "../lib/crypto";
 import { hashEmail, encryptFieldAsync } from "../lib/keyManager";
-import { log } from "../lib/audit";
+import { log, getAuditLogs } from "../lib/audit";
 import { recordFailedAttempt, raiseSecurityEvent } from "../lib/monitor";
 import { requireAuth } from "../middlewares/auth";
+import { authLimiter } from "../middlewares/rateLimit";
 
 const router = Router();
 
@@ -30,6 +31,7 @@ function getDeviceMeta(req: Request) {
 // Register or login via device ID
 router.post(
   "/register",
+  authLimiter,
   [
     body("deviceId").isString().isLength({ min: 16, max: 256 }).trim(),
     body("name").isString().isLength({ min: 1, max: 100 }).trim().escape(),
@@ -60,7 +62,6 @@ router.post(
         );
         user = rows[0];
         isNew = true;
-        // Optionally store recovery email at registration
         if (recoveryEmail) {
           const emailHash = hashEmail(recoveryEmail);
           const emailEnc = await encryptFieldAsync(recoveryEmail, user.id);
@@ -88,7 +89,7 @@ router.post(
 );
 
 // Refresh access token
-router.post("/refresh", async (req: Request, res: Response) => {
+router.post("/refresh", authLimiter, async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
   const ip = req.ip ?? "unknown";
 
@@ -153,5 +154,13 @@ router.patch(
     res.json(user);
   }
 );
+
+// ─── GET /auth/audit-logs — historial de auditoría del usuario ────────────────
+router.get("/audit-logs", requireAuth, async (req: Request, res: Response) => {
+  const userId = req.user!.sub;
+  const limit = Math.min(parseInt(String(req.query["limit"] ?? "30"), 10), 100);
+  const logs = await getAuditLogs(userId, limit);
+  res.json(logs);
+});
 
 export default router;

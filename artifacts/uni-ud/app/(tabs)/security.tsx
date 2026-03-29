@@ -15,22 +15,65 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { Radii, Shadows, Spacing } from "@/constants/design";
 import { useIdentity } from "@/context/IdentityContext";
+import { apiGetAuditLogs } from "@/lib/apiClient";
 
 interface SecurityEvent {
   id: string;
-  type: "blocked" | "learned" | "protected" | "scan";
+  type: "blocked" | "learned" | "protected" | "scan" | "auth" | "share";
   message: string;
   time: string;
   node?: string;
 }
 
-const MOCK_EVENTS: SecurityEvent[] = [
-  { id: "1", type: "blocked", message: "Acceso no autorizado bloqueado", time: "hace 2 min", node: "Nodo #4821" },
-  { id: "2", type: "learned", message: "Nuevo patrón de amenaza aprendido", time: "hace 15 min" },
-  { id: "3", type: "protected", message: "8 nodos protegidos automáticamente", time: "hace 1 h" },
-  { id: "4", type: "scan", message: "Análisis de integridad completado", time: "hace 3 h" },
-  { id: "5", type: "blocked", message: "Intento de suplantación detectado", time: "hace 5 h", node: "Nodo #2047" },
-  { id: "6", type: "learned", message: "Algoritmo de detección actualizado", time: "hace 1 d" },
+function auditToEvent(log: any, idx: number): SecurityEvent {
+  const ev = log.event as string;
+  const ts = new Date(log.created_at);
+  const diffMs = Date.now() - ts.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const timeStr =
+    diffMin < 1 ? "hace un momento" :
+    diffMin < 60 ? `hace ${diffMin} min` :
+    diffMin < 1440 ? `hace ${Math.floor(diffMin / 60)}h` :
+    `hace ${Math.floor(diffMin / 1440)}d`;
+
+  const typeMap: Record<string, SecurityEvent["type"]> = {
+    "auth.login": "protected",
+    "auth.register": "protected",
+    "auth.logout": "auth",
+    "auth.token_invalid": "blocked",
+    "auth.token_refreshed": "scan",
+    "share.created": "share",
+    "share.accessed": "share",
+    "share.revoked": "scan",
+    "session.revoked": "auth",
+    "session.revoked_all": "blocked",
+  };
+  const msgMap: Record<string, string> = {
+    "auth.login": "Inicio de sesión verificado",
+    "auth.register": "Identidad registrada",
+    "auth.logout": "Sesión cerrada",
+    "auth.token_invalid": "Token inválido detectado",
+    "auth.token_refreshed": "Token renovado exitosamente",
+    "share.created": "QR de identidad generado",
+    "share.accessed": "Alguien accedió a tu QR compartido",
+    "share.revoked": "Enlace compartido revocado",
+    "session.revoked": "Sesión revocada",
+    "session.revoked_all": "Logout global ejecutado",
+  };
+
+  return {
+    id: String(idx),
+    type: typeMap[ev] ?? "scan",
+    message: msgMap[ev] ?? ev.replace(/\./g, " · "),
+    time: timeStr,
+    node: log.ip_address ? `IP: ${log.ip_address}` : undefined,
+  };
+}
+
+const STATIC_EVENTS: SecurityEvent[] = [
+  { id: "s1", type: "protected", message: "Sistema inmunológico activo", time: "ahora" },
+  { id: "s2", type: "learned", message: "Red aprendió 23 nuevos patrones", time: "hace 1 h" },
+  { id: "s3", type: "scan", message: "Análisis de integridad completado", time: "hace 3 h" },
 ];
 
 const LAYERS = [
@@ -107,15 +150,30 @@ export default function SecurityScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
   const { documents } = useIdentity();
   const [threatLevel] = useState(12);
+  const [auditEvents, setAuditEvents] = useState<SecurityEvent[]>([]);
 
   const nodeCount = 147382;
   const protectedCount = 8241;
 
+  useEffect(() => {
+    apiGetAuditLogs(20).then((logs) => {
+      if (logs.length > 0) {
+        setAuditEvents(logs.map(auditToEvent));
+      } else {
+        setAuditEvents(STATIC_EVENTS);
+      }
+    }).catch(() => setAuditEvents(STATIC_EVENTS));
+  }, []);
+
+  const displayEvents = auditEvents.length > 0 ? auditEvents : STATIC_EVENTS;
+
   const eventMeta: Record<SecurityEvent["type"], { icon: string; color: string }> = {
-    blocked: { icon: "shield", color: colors.danger },
+    blocked: { icon: "shield", color: colors.danger ?? "#E53535" },
     learned: { icon: "cpu", color: colors.tint },
-    protected: { icon: "check-circle", color: colors.success },
+    protected: { icon: "check-circle", color: colors.success ?? "#38A169" },
     scan: { icon: "activity", color: "#D69E2E" },
+    auth: { icon: "log-in", color: "#7C3AED" },
+    share: { icon: "share-2", color: "#00D4FF" },
   };
 
   return (
@@ -303,8 +361,8 @@ export default function SecurityScreen() {
             Shadows.sm,
           ]}
         >
-          {MOCK_EVENTS.map((ev, i) => {
-            const meta = eventMeta[ev.type];
+          {displayEvents.slice(0, 8).map((ev, i) => {
+            const meta = eventMeta[ev.type] ?? { icon: "activity", color: colors.tint };
             return (
               <View key={ev.id}>
                 <View style={styles.eventRow}>
@@ -318,7 +376,7 @@ export default function SecurityScreen() {
                     </Text>
                   </View>
                 </View>
-                {i < MOCK_EVENTS.length - 1 && (
+                {i < Math.min(displayEvents.length, 8) - 1 && (
                   <View style={[styles.separator, { backgroundColor: colors.border }]} />
                 )}
               </View>

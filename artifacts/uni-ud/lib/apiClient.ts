@@ -85,6 +85,28 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
+// ─── Retry fetch with exponential backoff (network errors only) ───────────────
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      // Only retry on network-level errors (fetch throws), not HTTP errors
+      return res;
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < maxRetries - 1) {
+        await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 800));
+      }
+    }
+  }
+  throw lastError ?? new Error("Error de conexión");
+}
+
 // ─── Authenticated fetch ──────────────────────────────────────────────────────
 async function authFetch(
   path: string,
@@ -98,7 +120,7 @@ async function authFetch(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  const res = await fetchWithRetry(`${BASE_URL}${path}`, { ...options, headers });
 
   if (res.status === 401 && retry) {
     token = await refreshAccessToken();
@@ -248,10 +270,21 @@ export async function isLoggedIn(): Promise<boolean> {
 }
 
 // ─── Share / Identidad compartida ─────────────────────────────────────────────
+export async function apiShareHistory(): Promise<any[]> {
+  const res = await authFetch("/share/history");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function apiShareRevoke(token: string): Promise<void> {
+  await authFetch(`/share/${token}`, { method: "DELETE" });
+}
+
 export async function apiShareCreate(opts: {
   documentIds: string[];
   label?: string;
   expiresInMinutes: number;
+  allowFileView?: boolean;
 }): Promise<{ token: string; url: string; expiresAt: string }> {
   const res = await authFetch("/share/create", {
     method: "POST",
@@ -264,28 +297,43 @@ export async function apiShareCreate(opts: {
   return res.json();
 }
 
-export async function apiShareHistory(): Promise<any[]> {
-  const res = await authFetch("/share/history");
-  if (!res.ok) return [];
-  return res.json();
-}
-
-export async function apiShareRevoke(token: string): Promise<void> {
-  await authFetch(`/share/${token}`, { method: "DELETE" });
-}
-
 export async function apiShareView(token: string): Promise<{
   label: string | null;
   owner: { name: string };
   documents: any[];
   expiresAt: string;
   accessCount: number;
+  allowFileView: boolean;
 }> {
   const base = process.env["EXPO_PUBLIC_API_URL"] ?? "/api";
-  const res = await fetch(`${base}/share/${token}`);
+  const res = await fetchWithRetry(`${base}/share/${token}`, {});
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? "Enlace inválido o expirado");
   }
+  return res.json();
+}
+
+// ─── Sesiones activas ──────────────────────────────────────────────────────────
+export async function apiGetSessions(): Promise<any[]> {
+  const res = await authFetch("/sessions");
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.sessions ?? [];
+}
+
+export async function apiRevokeSession(sessionId: string): Promise<void> {
+  await authFetch(`/sessions/${sessionId}`, { method: "DELETE" });
+}
+
+export async function apiRevokeAllSessions(): Promise<void> {
+  await authFetch("/sessions", { method: "DELETE" });
+  await clearTokens();
+}
+
+// ─── Logs de auditoría ─────────────────────────────────────────────────────────
+export async function apiGetAuditLogs(limit = 30): Promise<any[]> {
+  const res = await authFetch(`/auth/audit-logs?limit=${limit}`);
+  if (!res.ok) return [];
   return res.json();
 }

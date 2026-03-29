@@ -16,12 +16,26 @@ import Colors from "@/constants/colors";
 import { Radii } from "@/constants/design";
 import { useAuth } from "@/context/AuthContext";
 
+function Countdown({ lockedUntil, onExpire }: { lockedUntil: number; onExpire: () => void }) {
+  const [seconds, setSeconds] = useState(Math.ceil((lockedUntil - Date.now()) / 1000));
+  useEffect(() => {
+    if (seconds <= 0) { onExpire(); return; }
+    const t = setTimeout(() => setSeconds((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [seconds]);
+  return (
+    <Text style={styles.lockoutText}>
+      Bloqueado por {seconds}s
+    </Text>
+  );
+}
+
 export function LockScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme !== "light";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { unlock, hasBiometrics, hasPin, verifyPin, setPin } = useAuth();
+  const { unlock, hasBiometrics, hasPin, verifyPin, setPin, failedAttempts, lockedUntil, successState } = useAuth();
 
   const [mode, setMode] = useState<"bio" | "pin" | "setpin">(
     hasBiometrics ? "bio" : hasPin ? "pin" : "setpin"
@@ -30,13 +44,33 @@ export function LockScreen() {
   const [confirmPin, setConfirmPin] = useState("");
   const [step, setStep] = useState<"enter" | "confirm">("enter");
   const [error, setError] = useState("");
+  const [isLocked, setIsLocked] = useState(lockedUntil != null && lockedUntil > Date.now());
+
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;
+  const successScale = useRef(new Animated.Value(1)).current;
+  const successOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: 600, useNativeDriver: true }).start();
     if (mode === "bio") unlock();
   }, []);
+
+  useEffect(() => {
+    if (successState) {
+      Animated.parallel([
+        Animated.spring(successScale, { toValue: 1.15, useNativeDriver: true }),
+        Animated.timing(successOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      ]).start();
+    } else {
+      successScale.setValue(1);
+      successOpacity.setValue(0);
+    }
+  }, [successState]);
+
+  useEffect(() => {
+    setIsLocked(lockedUntil != null && lockedUntil > Date.now());
+  }, [lockedUntil]);
 
   const shake = () => {
     Animated.sequence([
@@ -48,6 +82,7 @@ export function LockScreen() {
   };
 
   const handlePinDigit = async (digit: string) => {
+    if (isLocked) return;
     const next = pin + digit;
     setInputPin(next);
     setError("");
@@ -74,7 +109,13 @@ export function LockScreen() {
         const ok = await verifyPin(next);
         if (!ok) {
           shake();
-          setError("PIN incorrecto");
+          const remaining = 5 - (failedAttempts + 1);
+          if (remaining > 0) {
+            setError(`PIN incorrecto · ${remaining} intento${remaining !== 1 ? "s" : ""} restante${remaining !== 1 ? "s" : ""}`);
+          } else {
+            setError("Cuenta bloqueada temporalmente");
+            setIsLocked(true);
+          }
           setInputPin("");
         }
       }
@@ -98,7 +139,22 @@ export function LockScreen() {
       ? step === "enter"
         ? "Creá tu PIN de 6 dígitos"
         : "Confirmá tu PIN"
+      : isLocked
+      ? "Cuenta bloqueada"
       : "Ingresá tu PIN";
+
+  if (successState) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Animated.View style={[styles.successContainer, { opacity: successOpacity, transform: [{ scale: successScale }] }]}>
+          <LinearGradient colors={["#22C55E", "#16A34A"]} style={styles.successCircle}>
+            <Feather name="check" size={40} color="#fff" />
+          </LinearGradient>
+          <Text style={[styles.successText, { color: colors.text }]}>¡Acceso concedido!</Text>
+        </Animated.View>
+      </View>
+    );
+  }
 
   return (
     <Animated.View
@@ -115,7 +171,7 @@ export function LockScreen() {
       {/* Logo & branding */}
       <View style={styles.logoSection}>
         <LinearGradient
-          colors={["#1A6FE8", "#0D8AEB"]}
+          colors={successState ? ["#22C55E", "#16A34A"] : ["#1A6FE8", "#0D8AEB"]}
           style={styles.logoIcon}
         >
           <Feather name="shield" size={28} color="#fff" />
@@ -180,23 +236,37 @@ export function LockScreen() {
             ))}
           </Animated.View>
 
-          {error ? (
+          {/* Lockout countdown */}
+          {isLocked && lockedUntil ? (
+            <View style={[styles.lockoutBadge, { backgroundColor: "#E5353518", borderColor: "#E5353540" }]}>
+              <Feather name="lock" size={14} color="#E53535" />
+              <Countdown
+                lockedUntil={lockedUntil}
+                onExpire={() => {
+                  setIsLocked(false);
+                  setError("");
+                  setInputPin("");
+                }}
+              />
+            </View>
+          ) : error ? (
             <View style={styles.errorRow}>
               <Feather name="alert-circle" size={14} color="#F56565" />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : (
-            <View style={{ height: 22 }} />
+            <View style={{ height: 30 }} />
           )}
 
           {/* Keypad */}
-          <View style={styles.keypad}>
+          <View style={[styles.keypad, { opacity: isLocked ? 0.4 : 1 }]}>
             {digits.map((row, ri) => (
               <View key={ri} style={styles.keyRow}>
                 {row.map((d, di) => (
                   <Pressable
                     key={di}
                     onPress={() => {
+                      if (isLocked) return;
                       if (d === "del") handleDelete();
                       else if (d !== "") handlePinDigit(d);
                     }}
@@ -238,6 +308,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  successContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 20,
+  },
+  successCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  successText: {
+    fontSize: 24,
+    fontFamily: "Inter_700Bold",
   },
   logoSection: {
     alignItems: "center",
@@ -299,14 +386,29 @@ const styles = StyleSheet.create({
     height: 15,
     borderRadius: 7.5,
   },
+  lockoutBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: Radii.pill,
+    borderWidth: 1,
+  },
+  lockoutText: {
+    color: "#E53535",
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
   errorRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    height: 30,
   },
   errorText: {
     color: "#F56565",
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: "Inter_500Medium",
   },
   keypad: {

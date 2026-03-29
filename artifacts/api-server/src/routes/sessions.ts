@@ -27,7 +27,7 @@ router.delete(
   async (req: Request, res: Response) => {
     if (!validate(req, res)) return;
     const userId = req.user!.sub;
-    const ok = await revokeSession(req.params.id, userId);
+    const ok = await revokeSession(req.params["id"] as string, userId);
     if (!ok) { res.status(404).json({ error: "Sesión no encontrada" }); return; }
     await log({ userId, event: "session.revoked", ip: req.ip, metadata: { sessionId: req.params.id } });
     res.json({ ok: true });

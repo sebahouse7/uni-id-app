@@ -65,13 +65,28 @@ export default function ShareScreen() {
   const [history, setHistory] = useState<ShareToken[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [allowFileView, setAllowFileView] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const qrPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     loadHistory();
   }, []);
+
+  useEffect(() => {
+    if (showQrModal) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(qrPulse, { toValue: 1.04, duration: 1200, useNativeDriver: true }),
+          Animated.timing(qrPulse, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+  }, [showQrModal]);
 
   const loadHistory = async () => {
     setLoadingHistory(true);
@@ -110,6 +125,7 @@ export default function ShareScreen() {
         documentIds: Array.from(selected),
         label: label.trim() || undefined,
         expiresInMinutes: expiry,
+        allowFileView,
       });
       setQrResult(result);
       setShowQrModal(true);
@@ -324,6 +340,36 @@ export default function ShareScreen() {
           </View>
         </View>
 
+        {/* Allow file view */}
+        <View style={[styles.section, { marginBottom: 16 }]}>
+          <Pressable
+            onPress={() => setAllowFileView((v) => !v)}
+            style={[
+              styles.toggleRow,
+              {
+                backgroundColor: allowFileView ? "#1A6FE812" : colors.backgroundCard,
+                borderColor: allowFileView ? "#1A6FE840" : colors.border,
+              },
+            ]}
+          >
+            <View style={[styles.infoIcon2, { backgroundColor: allowFileView ? "#1A6FE818" : colors.border + "40" }]}>
+              <Feather name="eye" size={16} color={allowFileView ? "#1A6FE8" : colors.textSecondary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.toggleTitle, { color: colors.text }]}>Vista completa de documentos</Text>
+              <Text style={[styles.toggleSub, { color: colors.textSecondary }]}>
+                {allowFileView ? "El receptor verá detalles completos" : "Solo se muestra título y categoría"}
+              </Text>
+            </View>
+            <View style={[
+              styles.toggleSwitch,
+              { backgroundColor: allowFileView ? "#1A6FE8" : colors.border }
+            ]}>
+              <View style={[styles.toggleThumb, { transform: [{ translateX: allowFileView ? 16 : 0 }] }]} />
+            </View>
+          </Pressable>
+        </View>
+
         {/* Label */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -439,14 +485,14 @@ export default function ShareScreen() {
 
           {qrResult && (
             <>
-              <View style={[styles.qrContainer, { backgroundColor: "#fff" }]}>
+              <Animated.View style={[styles.qrContainer, { backgroundColor: "#fff", transform: [{ scale: qrPulse }] }]}>
                 <QRCode
                   value={qrResult.url}
                   size={220}
                   color="#060B18"
                   backgroundColor="#fff"
                 />
-              </View>
+              </Animated.View>
 
               <View style={[styles.expiryBadge, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
                 <Feather name="clock" size={14} color={colors.textSecondary} />
@@ -584,6 +630,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   expiryText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: Radii.lg,
+    borderWidth: 1,
+  },
+  infoIcon2: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
+  toggleSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  toggleSwitch: {
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    padding: 2,
+  },
+  toggleThumb: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
 
   labelInput: {
     flexDirection: "row",

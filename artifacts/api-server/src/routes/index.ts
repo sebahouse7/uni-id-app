@@ -8,8 +8,11 @@ import monitorRouter from "./monitor";
 import backupRouter from "./backup";
 import recoveryRouter from "./recovery";
 import shareRouter from "./share";
+import { generalLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
+
+router.use(generalLimiter);
 
 router.use(healthRouter);
 router.use("/auth", authRouter);

@@ -19,6 +19,8 @@ router.post("/create", requireAuth, async (req: Request, res: Response) => {
     expiresInMinutes?: number;
   };
 
+  const allowFileView = Boolean(req.body.allowFileView ?? false);
+
   if (!Array.isArray(documentIds) || documentIds.length === 0) {
     res.status(400).json({ error: "Seleccioná al menos un documento" });
     return;
@@ -45,9 +47,9 @@ router.post("/create", requireAuth, async (req: Request, res: Response) => {
   const expiresAt = new Date(Date.now() + mins * 60 * 1000);
 
   await query(
-    `INSERT INTO uni_share_tokens (id, user_id, document_ids, label, expires_at)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [token, userId, documentIds, label ?? null, expiresAt]
+    `INSERT INTO uni_share_tokens (id, user_id, document_ids, label, expires_at, allow_file_view)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [token, userId, documentIds, label ?? null, expiresAt, allowFileView]
   );
 
   await log({
@@ -109,8 +111,9 @@ router.get("/:token", async (req: Request, res: Response) => {
     expires_at: string;
     revoked: boolean;
     access_count: number;
+    allow_file_view: boolean;
   }>(
-    `SELECT id, user_id, document_ids, label, expires_at, revoked, access_count
+    `SELECT id, user_id, document_ids, label, expires_at, revoked, access_count, allow_file_view
      FROM uni_share_tokens WHERE id = $1`,
     [token]
   );
@@ -133,19 +136,23 @@ router.get("/:token", async (req: Request, res: Response) => {
     [row.user_id]
   );
 
-  // Solo campos no sensibles — sin fileUri / fileName
+  const docFields = row.allow_file_view
+    ? "id, title, category, description, tags, file_name, file_type, file_size, created_at, updated_at"
+    : "id, title, category, description, tags, created_at, updated_at";
+
   const docs = await query<{
     id: string;
     title: string;
     category: string;
     description: string | null;
     tags: string[] | null;
+    file_name?: string | null;
+    file_type?: string | null;
+    file_size?: number | null;
     created_at: string;
     updated_at: string;
   }>(
-    `SELECT id, title, category, description, tags, created_at, updated_at
-     FROM uni_documents
-     WHERE id = ANY($1) AND user_id = $2`,
+    `SELECT ${docFields} FROM uni_documents WHERE id = ANY($1) AND user_id = $2`,
     [row.document_ids, row.user_id]
   );
 
@@ -155,12 +162,20 @@ router.get("/:token", async (req: Request, res: Response) => {
     metadata: { token: token.slice(0, 8) + "...", documentCount: docs.length },
   });
 
+  const watermark = {
+    ownerName: owner?.name ?? "Usuario",
+    sharedAt: new Date().toISOString(),
+    tokenId: token.slice(0, 8),
+  };
+
   res.json({
     label: row.label,
     owner: { name: owner?.name ?? "Usuario" },
     documents: docs,
     expiresAt: row.expires_at,
     accessCount: row.access_count + 1,
+    allowFileView: row.allow_file_view,
+    watermark,
   });
 });
 

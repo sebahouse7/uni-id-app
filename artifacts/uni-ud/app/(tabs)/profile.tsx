@@ -1,8 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -19,6 +20,7 @@ import Colors from "@/constants/colors";
 import { Radii, Shadows, Spacing } from "@/constants/design";
 import { CATEGORIES, useIdentity } from "@/context/IdentityContext";
 import { LANGUAGES, useLanguage } from "@/context/LanguageContext";
+import { apiGetSessions, apiRevokeAllSessions } from "@/lib/apiClient";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -31,6 +33,36 @@ export default function ProfileScreen() {
   const [name, setName] = useState(node?.name ?? "");
   const [bio, setBio] = useState(node?.bio ?? "");
   const [saving, setSaving] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [revokingAll, setRevokingAll] = useState(false);
+
+  useEffect(() => {
+    apiGetSessions().then(setSessions).catch(() => {});
+  }, []);
+
+  const handleRevokeAll = () => {
+    Alert.alert(
+      "Cerrar todas las sesiones",
+      "Se cerrarán todas las sesiones activas en todos tus dispositivos. Tendrás que volver a ingresar.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Cerrar todo",
+          style: "destructive",
+          onPress: async () => {
+            setRevokingAll(true);
+            try {
+              await apiRevokeAllSessions();
+              router.replace("/onboarding" as any);
+            } catch {
+              Alert.alert("Error", "No se pudo cerrar las sesiones. Intentá de nuevo.");
+              setRevokingAll(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -348,6 +380,47 @@ export default function ProfileScreen() {
           </AnimatedPressable>
         </>
       )}
+
+      {/* Sessions & Security */}
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Seguridad de cuenta</Text>
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: colors.backgroundCard, borderColor: colors.border, marginBottom: 24 },
+          Shadows.sm,
+        ]}
+      >
+        <View style={styles.infoRow}>
+          <View style={[styles.infoIcon, { backgroundColor: "#1A6FE815" }]}>
+            <Feather name="smartphone" size={15} color="#1A6FE8" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Sesiones activas</Text>
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              {sessions.length > 0 ? `${sessions.length} dispositivo${sessions.length !== 1 ? "s" : ""}` : "Cargando..."}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.separator, { backgroundColor: colors.border }]} />
+        <Pressable
+          onPress={handleRevokeAll}
+          disabled={revokingAll}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        >
+          <View style={[styles.infoRow, { gap: 14 }]}>
+            <View style={[styles.infoIcon, { backgroundColor: "#E5353515" }]}>
+              <Feather name="log-out" size={15} color="#E53535" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Cerrar sesión en todos los dispositivos</Text>
+              <Text style={[{ fontSize: 13, fontFamily: "Inter_400Regular", color: "#E53535" }]}>
+                {revokingAll ? "Cerrando..." : "Logout global inmediato"}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={15} color={colors.textSecondary} />
+          </View>
+        </Pressable>
+      </View>
 
       {/* Language selector */}
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.language}</Text>
