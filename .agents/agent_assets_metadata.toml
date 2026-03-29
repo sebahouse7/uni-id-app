@@ -30,3 +30,9 @@ id = "K1o_TsjqzQb7viwt5PO1W"
 uri = "file://uni-id-export.tar.gz"
 type = "unspecified"
 title = "uni.id — Código fuente completo (tar.gz, 1.9 MB)"
+
+[[outputs]]
+id = "CAonem29CL1ppkXtllrsK"
+uri = "file://uni-id-completo.tar.gz"
+type = "unspecified"
+title = "uni.id — Proyecto completo (232 archivos, 2.2 MB)"
