@@ -22,6 +22,10 @@ run = "pnpm --filter @workspace/uni-ud run dev"
 build = [ "pnpm", "--filter", "@workspace/uni-ud", "run", "build" ]
 run = [ "pnpm", "--filter", "@workspace/uni-ud", "run", "serve" ]
 
+[services.production.env]
+EXPO_PUBLIC_API_URL = "/api"
+NODE_ENV = "production"
+
 [services.env]
 PORT = "24796"
 BASE_PATH = "/"
