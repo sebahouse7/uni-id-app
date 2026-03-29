@@ -8,9 +8,23 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
-// ─── Security headers ────────────────────────────────────────────────────────
+// ─── CORS — DEBE ir PRIMERO, antes que Helmet y rate limiting ─────────────────
+const corsOptions: cors.CorsOptions = {
+  origin: "*",
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id", "X-Device-Name", "X-Device-Platform"],
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+};
+app.use(cors(corsOptions));
+app.options("/{*path}", cors(corsOptions));
+
+// ─── Security headers ─────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: false,
+  crossOriginResourcePolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginEmbedderPolicy: false,
 }));
 app.set("trust proxy", 1);
 
@@ -48,9 +62,7 @@ app.use(
 );
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
-app.use(cors({ origin: "*", methods: ["GET","POST","PATCH","DELETE","OPTIONS"] }));
-
-// Raw body for webhook signature verification
+// Raw body for webhook signature verification (must come before express.json)
 app.use("/api/subscriptions/webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
