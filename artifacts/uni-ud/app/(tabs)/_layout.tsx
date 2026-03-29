@@ -36,6 +36,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "network", selected: "network" }} />
         <Label>{t.tabNetwork}</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="business">
+        <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
+        <Label>{t.tabBusiness}</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
         <Label>{t.tabProfile}</Label>
@@ -189,6 +193,22 @@ function ClassicTabLayout() {
               />
             ) : (
               <TabIcon name="share-2" color={color} focused={focused} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="business"
+        options={{
+          title: t.tabBusiness,
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView
+                name={focused ? "briefcase.fill" : "briefcase"}
+                tintColor={color}
+                size={23}
+              />
+            ) : (
+              <TabIcon name="briefcase" color={color} focused={focused} />
             ),
         }}
       />

@@ -21,6 +21,7 @@ import { secureGet, secureSet, secureDelete } from "./SecureStorage";
 
 export type DocumentCategory =
   | "identity"
+  | "passport"
   | "education"
   | "health"
   | "driving"
@@ -305,6 +306,7 @@ export function useIdentity() {
 
 export const CATEGORIES: { key: DocumentCategory; label: string; icon: string; sfIcon: string; color: string }[] = [
   { key: "identity",  label: "Identidad",    icon: "credit-card", sfIcon: "creditcard.fill",    color: "#1A6FE8" },
+  { key: "passport",  label: "Pasaporte",    icon: "globe",       sfIcon: "globe",              color: "#0891B2" },
   { key: "education", label: "Estudios",      icon: "book",        sfIcon: "graduationcap.fill", color: "#7C3AED" },
   { key: "health",    label: "Salud",         icon: "heart",       sfIcon: "heart.fill",         color: "#E53E3E" },
   { key: "driving",   label: "Licencia",      icon: "truck",       sfIcon: "car.fill",           color: "#D69E2E" },

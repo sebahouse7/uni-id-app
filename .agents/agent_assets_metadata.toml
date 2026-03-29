@@ -24,3 +24,9 @@ id = "6lXka5tRTdZWSQe9UTDsR"
 uri = "file://screenshots/email-preview-v2.jpg"
 type = "image"
 title = "Email de recuperación mejorado — uni.id"
+
+[[outputs]]
+id = "K1o_TsjqzQb7viwt5PO1W"
+uri = "file://uni-id-export.tar.gz"
+type = "unspecified"
+title = "uni.id — Código fuente completo (tar.gz, 1.9 MB)"

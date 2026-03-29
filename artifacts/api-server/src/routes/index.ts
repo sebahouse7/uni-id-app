@@ -8,6 +8,7 @@ import monitorRouter from "./monitor";
 import backupRouter from "./backup";
 import recoveryRouter from "./recovery";
 import shareRouter from "./share";
+import businessRouter from "./business";
 import { generalLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
@@ -23,5 +24,6 @@ router.use("/sessions", sessionsRouter);
 router.use("/monitor", monitorRouter);
 router.use("/backup", backupRouter);
 router.use("/share", shareRouter);
+router.use("/businesses", businessRouter);
 
 export default router;

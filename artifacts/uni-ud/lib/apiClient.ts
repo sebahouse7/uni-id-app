@@ -337,3 +337,52 @@ export async function apiGetAuditLogs(limit = 30): Promise<any[]> {
   if (!res.ok) return [];
   return res.json();
 }
+
+// ─── Business ─────────────────────────────────────────────────────────────────
+export async function apiGetBusinesses(): Promise<any[]> {
+  const res = await authFetch("/businesses");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function apiCreateBusiness(data: {
+  name: string; legalName?: string; taxId?: string; businessType?: string;
+  industry?: string; foundedDate?: string; address?: string; city?: string;
+  country?: string; website?: string; email?: string; phone?: string; description?: string;
+}): Promise<any> {
+  const res = await authFetch("/businesses", { method: "POST", body: JSON.stringify(data) });
+  if (!res.ok) throw new Error("Error al crear empresa");
+  return res.json();
+}
+
+export async function apiUpdateBusiness(id: string, data: Partial<{
+  name: string; legalName: string; taxId: string; businessType: string;
+  industry: string; foundedDate: string; address: string; city: string;
+  country: string; website: string; email: string; phone: string; description: string;
+}>): Promise<any> {
+  const res = await authFetch(`/businesses/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  if (!res.ok) throw new Error("Error al actualizar empresa");
+  return res.json();
+}
+
+export async function apiDeleteBusiness(id: string): Promise<void> {
+  await authFetch(`/businesses/${id}`, { method: "DELETE" });
+}
+
+export async function apiGetBusinessDocuments(businessId: string): Promise<any[]> {
+  const res = await authFetch(`/businesses/${businessId}/documents`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function apiAddBusinessDocument(businessId: string, data: {
+  title: string; description?: string; docType?: string; fileUri?: string; fileName?: string;
+}): Promise<any> {
+  const res = await authFetch(`/businesses/${businessId}/documents`, { method: "POST", body: JSON.stringify(data) });
+  if (!res.ok) throw new Error("Error al agregar documento");
+  return res.json();
+}
+
+export async function apiDeleteBusinessDocument(businessId: string, docId: string): Promise<void> {
+  await authFetch(`/businesses/${businessId}/documents/${docId}`, { method: "DELETE" });
+}

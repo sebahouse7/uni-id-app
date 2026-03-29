@@ -1,0 +1,95 @@
+Necesito preparar este proyecto para sacarlo completamente de Replit y poder usarlo en servidores externos sin depender de créditos.
+
+Hacer TODO en orden y confirmar cada punto:
+
+1. EXPORTACIÓN COMPLETA
+
+- Generar un archivo ZIP con TODO el proyecto (frontend + backend)
+- Incluir todas las carpetas necesarias
+- Excluir archivos sensibles (.env reales)
+- Crear archivo .env.example con todas las variables necesarias documentadas
+
+2. LIMPIEZA DE REPLIT
+
+- Eliminar cualquier dependencia específica de Replit
+- Asegurar que el proyecto funcione como app estándar Node.js + Expo
+- Verificar que frontend y backend funcionen fuera de Replit
+
+3. CONFIGURACIÓN PARA PRODUCCIÓN
+
+- Configurar uso de process.env.PORT
+- Usar rutas relativas (/api)
+- Configurar CORS correctamente
+- Preparar para deploy en Railway y Render
+
+4. BASE DE DATOS
+
+- Verificar conexión externa a PostgreSQL
+- Documentar DATABASE_URL y variables necesarias
+- Asegurar persistencia de datos fuera de Replit
+
+5. DOCUMENTACIÓN (README.md)
+   Incluir:
+
+- Instalación (npm install)
+- Ejecución local (npm run dev / start)
+- Variables de entorno
+- Deploy paso a paso en Railway
+- Deploy paso a paso en Render
+
+6. VERIFICACIÓN FINAL
+
+- Confirmar que el proyecto funciona sin Replit
+- Confirmar que no hay errores
+- Confirmar que está listo para producción
+
+7. ENTREGA
+
+- Proveer link de descarga del ZIP
+- Confirmar que el proyecto está listo para migrar
+
+---
+
+MEJORAS FUNCIONALES (INCLUIR ANTES DE EXPORTAR):
+
+8. Agregar nueva categoría:
+
+- "Pasaporte" dentro de documentos
+
+9. Agregar nueva sección:
+
+- "Mi empresa / Mi negocio"
+  Con:
+- datos básicos
+- documentos empresariales
+- identidad empresarial
+
+10. Asegurar persistencia:
+
+- Guardado automático (AsyncStorage / backend)
+- Mantener sesión activa (no cerrar al salir)
+- Manejo de errores al reabrir app
+
+11. Seguridad:
+
+- PIN
+- Biometría (huella)
+- Bloqueo tras intentos fallidos
+
+12. Compartir identidad:
+
+- QR dinámico
+- Permisos (qué mostrar)
+- Expiración del QR
+
+13. Pagos:
+
+- Mantener integración con MercadoPago
+- Verificar que funcione fuera de Replit (solo estructura, sin credenciales reales)
+
+---
+
+OBJETIVO FINAL:
+Dejar la app 100% independiente de Replit, lista para producción real, escalable y deploy profesional.
+
+Confirmar todo antes de entregar.
