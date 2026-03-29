@@ -5,7 +5,15 @@ let pool: Pool | null = null;
 export function getDb(): Pool {
   if (!pool) {
     const url = process.env["DATABASE_URL"];
-    if (!url) throw new Error("DATABASE_URL not set");
+    if (!url) {
+      throw new Error(
+        "\n\n❌  DATABASE_URL no está configurado.\n" +
+        "   1. Copiá artifacts/api-server/.env.example → artifacts/api-server/.env\n" +
+        "   2. Completá DATABASE_URL con tu connection string de PostgreSQL\n" +
+        "   3. Podés crear una base gratuita en https://neon.tech o https://supabase.com\n" +
+        "   4. Reiniciá el servidor con: pnpm dev\n"
+      );
+    }
     pool = new Pool({
       connectionString: url,
       max: 10,

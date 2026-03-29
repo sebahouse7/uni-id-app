@@ -2,13 +2,18 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 const BASE_URL = (() => {
-  if (typeof process.env["EXPO_PUBLIC_API_URL"] === "string" && process.env["EXPO_PUBLIC_API_URL"].length > 0) {
-    return process.env["EXPO_PUBLIC_API_URL"];
+  // 1. Variable explícita en .env.local — siempre tiene prioridad
+  const envUrl = process.env["EXPO_PUBLIC_API_URL"];
+  if (typeof envUrl === "string" && envUrl.length > 0) {
+    return envUrl;
   }
+  // 2. Build de producción en web → ruta relativa
   if (Platform.OS === "web" && typeof __DEV__ !== "undefined" && !__DEV__) {
     return "/api";
   }
-  return `https://${process.env["EXPO_PUBLIC_DOMAIN"]}:8080/api`;
+  // 3. Default local: funciona en navegador y Expo Go en el mismo PC
+  //    Para acceder desde celular físico, definí EXPO_PUBLIC_API_URL=http://TU_IP:8080/api
+  return "http://localhost:8080/api";
 })();
 
 const KEYS = {
