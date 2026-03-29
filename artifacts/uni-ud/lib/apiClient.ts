@@ -17,29 +17,56 @@ const KEYS = {
   USER_ID: "uni_user_id",
 };
 
+// ─── Web localStorage helpers ─────────────────────────────────────────────────
+const webStore = {
+  get(key: string): string | null {
+    try { return typeof localStorage !== "undefined" ? localStorage.getItem(key) : null; }
+    catch { return null; }
+  },
+  set(key: string, value: string): void {
+    try { if (typeof localStorage !== "undefined") localStorage.setItem(key, value); }
+    catch {}
+  },
+  delete(key: string): void {
+    try { if (typeof localStorage !== "undefined") localStorage.removeItem(key); }
+    catch {}
+  },
+};
+
+// ─── Token storage (platform-aware) ──────────────────────────────────────────
 async function storeTokens(access: string, refresh: string): Promise<void> {
-  if (Platform.OS === "web") return;
+  if (Platform.OS === "web") {
+    webStore.set(KEYS.ACCESS, access);
+    webStore.set(KEYS.REFRESH, refresh);
+    return;
+  }
   await SecureStore.setItemAsync(KEYS.ACCESS, access);
   await SecureStore.setItemAsync(KEYS.REFRESH, refresh);
 }
 
 async function getAccessToken(): Promise<string | null> {
-  if (Platform.OS === "web") return null;
-  return SecureStore.getItemAsync(KEYS.ACCESS);
+  if (Platform.OS === "web") return webStore.get(KEYS.ACCESS);
+  return SecureStore.getItemAsync(KEYS.ACCESS).catch(() => null);
 }
 
 async function getRefreshToken(): Promise<string | null> {
-  if (Platform.OS === "web") return null;
-  return SecureStore.getItemAsync(KEYS.REFRESH);
+  if (Platform.OS === "web") return webStore.get(KEYS.REFRESH);
+  return SecureStore.getItemAsync(KEYS.REFRESH).catch(() => null);
 }
 
 export async function clearTokens(): Promise<void> {
-  if (Platform.OS === "web") return;
-  await SecureStore.deleteItemAsync(KEYS.ACCESS);
-  await SecureStore.deleteItemAsync(KEYS.REFRESH);
-  await SecureStore.deleteItemAsync(KEYS.USER_ID);
+  if (Platform.OS === "web") {
+    webStore.delete(KEYS.ACCESS);
+    webStore.delete(KEYS.REFRESH);
+    webStore.delete(KEYS.USER_ID);
+    return;
+  }
+  await SecureStore.deleteItemAsync(KEYS.ACCESS).catch(() => {});
+  await SecureStore.deleteItemAsync(KEYS.REFRESH).catch(() => {});
+  await SecureStore.deleteItemAsync(KEYS.USER_ID).catch(() => {});
 }
 
+// ─── Token refresh ────────────────────────────────────────────────────────────
 async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) return null;
@@ -58,6 +85,7 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
+// ─── Authenticated fetch ──────────────────────────────────────────────────────
 async function authFetch(
   path: string,
   options: RequestInit = {},
@@ -97,10 +125,29 @@ export async function apiRegister(
   }
   const data = await res.json();
   await storeTokens(data.accessToken, data.refreshToken);
-  if (Platform.OS !== "web") {
+  if (Platform.OS === "web") {
+    webStore.set(KEYS.USER_ID, data.user.id);
+  } else {
     await SecureStore.setItemAsync(KEYS.USER_ID, data.user.id);
   }
   return data;
+}
+
+/**
+ * Verifica si la sesión actual es válida contra el backend.
+ * No lanza error — devuelve { authenticated: false } si no hay sesión.
+ */
+export async function apiCheckSession(): Promise<{ authenticated: boolean; user?: any }> {
+  const token = await getAccessToken();
+  if (!token) return { authenticated: false };
+  try {
+    const res = await authFetch("/auth/me");
+    if (!res.ok) return { authenticated: false };
+    const user = await res.json();
+    return { authenticated: true, user };
+  } catch {
+    return { authenticated: false };
+  }
 }
 
 export async function apiGetProfile(): Promise<any> {

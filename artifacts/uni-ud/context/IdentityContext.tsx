@@ -10,15 +10,14 @@ import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import {
   apiRegister,
-  apiGetProfile,
+  apiCheckSession,
   apiUpdateProfile,
   apiGetDocuments,
   apiCreateDocument,
   apiUpdateDocument,
   apiDeleteDocument,
-  isLoggedIn,
 } from "../lib/apiClient";
-import { secureGet, secureSet } from "./SecureStorage";
+import { secureGet, secureSet, secureDelete } from "./SecureStorage";
 
 export type DocumentCategory =
   | "identity"
@@ -70,8 +69,18 @@ function generateDeviceId(): string {
 }
 
 async function getOrCreateDeviceId(): Promise<string> {
-  if (Platform.OS === "web") return "web-device-" + Date.now();
-  let id = await SecureStore.getItemAsync(DEVICE_ID_KEY);
+  if (Platform.OS === "web") {
+    try {
+      const stored = typeof localStorage !== "undefined" ? localStorage.getItem(DEVICE_ID_KEY) : null;
+      if (stored) return stored;
+      const id = generateDeviceId();
+      if (typeof localStorage !== "undefined") localStorage.setItem(DEVICE_ID_KEY, id);
+      return id;
+    } catch {
+      return generateDeviceId();
+    }
+  }
+  let id = await SecureStore.getItemAsync(DEVICE_ID_KEY).catch(() => null);
   if (!id) {
     id = generateDeviceId();
     await SecureStore.setItemAsync(DEVICE_ID_KEY, id);
@@ -140,24 +149,32 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     syncRef.current = true;
     setIsSyncing(true);
     try {
-      const loggedIn = await isLoggedIn();
-      if (!loggedIn) {
+      // Verify session with backend — handles refresh tokens automatically
+      const session = await apiCheckSession();
+
+      if (!session.authenticated) {
+        // Tokens expired or invalid — clear everything and go back to onboarding
+        await secureDelete(CACHE_KEY_NODE).catch(() => {});
+        await secureDelete(CACHE_KEY_DOCS).catch(() => {});
+        setNode(null);
+        setDocuments([]);
         setIsOnline(false);
         return;
       }
-      const [profile, docs] = await Promise.all([
-        apiGetProfile(),
-        apiGetDocuments(),
-      ]);
+
+      // Session valid — sync profile + documents
+      const docs = await apiGetDocuments();
       setIsOnline(true);
+
       const backendNode: IdentityNode = {
-        id: profile.id,
-        name: profile.name,
-        bio: profile.bio,
-        createdAt: profile.created_at,
-        networkPlan: profile.network_plan,
+        id: session.user.id,
+        name: session.user.name,
+        bio: session.user.bio,
+        createdAt: session.user.created_at,
+        networkPlan: session.user.network_plan,
       };
       await cacheNode(backendNode);
+
       const backendDocs: Document[] = docs.map((d: any) => ({
         id: d.id,
         title: d.title,
@@ -171,6 +188,7 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
       }));
       await cacheDocs(backendDocs);
     } catch {
+      // Network error — keep cached data, just mark offline
       setIsOnline(false);
     } finally {
       setIsSyncing(false);
