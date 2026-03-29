@@ -1,3 +1,27 @@
+# uni.id — Workspace
+
+## App: uni.id (artifacts/uni-ud)
+Mobile identity wallet app built with Expo React Native.
+
+### UI Design System (v2 — Fintech Style)
+- **Design tokens**: `constants/design.ts` — Spacing, Radii, Shadows, Typography
+- **Reusable components**: `components/ui/AnimatedPressable.tsx` — spring physics press feedback
+- **Color palette**: Navy dark (#060B18 bg), Electric blue (#1A6FE8 primary), Cyan (#00D4FF) accent
+- **Font**: Inter (400/500/600/700) via `@expo-google-fonts/inter`
+- **Gradients**: `expo-linear-gradient` used on hero cards, buttons, lock screen
+- **Animations**: `Animated` API (spring physics) for mount-in effects + micro-interactions
+- **Dark mode**: Automatic (follows system) with dedicated color tokens in `constants/colors.ts`
+
+### Screens Redesigned
+- `app/(tabs)/index.tsx` — Dashboard: gradient hero card, animated mount, 2-col category grid
+- `app/(tabs)/documents.tsx` — Premium search bar, chip filters with counts, card shadows
+- `app/(tabs)/profile.tsx` — Gradient hero section, plan badges, category breakdown
+- `app/(tabs)/network.tsx` — Gradient plan cards, LinearGradient CTA button
+- `app/(tabs)/security.tsx` — Live viz with LinearGradient, animated threat bar, activity feed
+- `app/(tabs)/_layout.tsx` — Cleaner tab bar with iOS SF Symbols / Feather icons
+- `app/onboarding.tsx` — Gradient slide icons, animated scale transitions, trust badge
+- `components/LockScreen.tsx` — Gradient logo icon, premium keypad UI
+
 # Workspace
 
 ## Overview

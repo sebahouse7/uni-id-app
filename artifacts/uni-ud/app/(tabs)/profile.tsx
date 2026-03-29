@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -13,7 +14,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AnimatedPressable } from "@/components/ui/AnimatedPressable";
 import Colors from "@/constants/colors";
+import { Radii, Shadows, Spacing } from "@/constants/design";
 import { CATEGORIES, useIdentity } from "@/context/IdentityContext";
 import { LANGUAGES, useLanguage } from "@/context/LanguageContext";
 
@@ -27,9 +30,12 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(node?.name ?? "");
   const [bio, setBio] = useState(node?.bio ?? "");
+  const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    setSaving(true);
     await updateNode({ name, bio });
+    setSaving(false);
     setEditing(false);
   };
 
@@ -45,11 +51,19 @@ export default function ProfileScreen() {
       ? "Conexión Básica"
       : "Conexión Pro";
 
+  const planColor =
+    node?.networkPlan === "free"
+      ? colors.textSecondary
+      : node?.networkPlan === "basic"
+      ? "#1A6FE8"
+      : "#7C3AED";
+
   const infoRows = [
     {
       label: "ID único",
       value: node?.id?.slice(0, 16).toUpperCase() ?? "—",
       icon: "hash",
+      color: "#1A6FE8",
     },
     {
       label: "Miembro desde",
@@ -60,8 +74,14 @@ export default function ProfileScreen() {
           })
         : "—",
       icon: "calendar",
+      color: "#00D4FF",
     },
-    { label: "Plan", value: planLabel, icon: "star" },
+    {
+      label: "Plan activo",
+      value: planLabel,
+      icon: "star",
+      color: planColor,
+    },
   ];
 
   return (
@@ -70,160 +90,182 @@ export default function ProfileScreen() {
       contentInsetAdjustmentBehavior="automatic"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
-        paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 16,
-        paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 100,
+        paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 12,
+        paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 110,
       }}
     >
       {/* Header */}
       <View style={styles.headerRow}>
         <Text style={[styles.title, { color: colors.text }]}>Mi perfil</Text>
-        <Pressable
+        <AnimatedPressable
           onPress={() => (editing ? handleSave() : setEditing(true))}
-          style={({ pressed }) => [
-            styles.editBtn,
-            {
-              backgroundColor: editing ? colors.tint : colors.backgroundCard,
-              borderColor: editing ? colors.tint : colors.border,
-              opacity: pressed ? 0.85 : 1,
-            },
+          scale={0.92}
+        >
+          <View
+            style={[
+              styles.editBtn,
+              {
+                backgroundColor: editing ? colors.tint : colors.backgroundCard,
+                borderColor: editing ? colors.tint : colors.border,
+              },
+              editing ? Shadows.colored(colors.tint) : Shadows.sm,
+            ]}
+          >
+            <Feather
+              name={editing ? (saving ? "loader" : "check") : "edit-2"}
+              size={15}
+              color={editing ? "#fff" : colors.text}
+            />
+            <Text style={[styles.editBtnText, { color: editing ? "#fff" : colors.text }]}>
+              {editing ? (saving ? "Guardando..." : "Guardar") : "Editar"}
+            </Text>
+          </View>
+        </AnimatedPressable>
+      </View>
+
+      {/* Profile Hero */}
+      <View style={[styles.profileHero, { marginHorizontal: Spacing.md, marginBottom: 20 }]}>
+        <LinearGradient
+          colors={isDark ? ["#0D1525", "#111827"] : ["#F0F6FF", "#FFFFFF"]}
+          style={[
+            styles.profileHeroInner,
+            { borderColor: colors.border },
+            Shadows.md,
           ]}
         >
-          <Feather
-            name={editing ? "check" : "edit-2"}
-            size={16}
-            color={editing ? "#fff" : colors.text}
-          />
-          <Text style={[styles.editBtnText, { color: editing ? "#fff" : colors.text }]}>
-            {editing ? "Guardar" : "Editar"}
-          </Text>
-        </Pressable>
+          {/* Avatar */}
+          <LinearGradient
+            colors={["#1A6FE8", "#0D8AEB"]}
+            style={styles.avatar}
+          >
+            <Text style={styles.avatarLetter}>
+              {(node?.name ?? "U")[0].toUpperCase()}
+            </Text>
+          </LinearGradient>
+
+          {editing ? (
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              style={[
+                styles.nameInput,
+                { color: colors.text, borderBottomColor: colors.tint },
+              ]}
+              placeholder="Tu nombre"
+              placeholderTextColor={colors.textSecondary}
+              textAlign="center"
+              autoFocus
+            />
+          ) : (
+            <Text style={[styles.userName, { color: colors.text }]}>
+              {node?.name ?? "Mi Identidad"}
+            </Text>
+          )}
+
+          {editing ? (
+            <TextInput
+              value={bio}
+              onChangeText={setBio}
+              style={[
+                styles.bioInput,
+                {
+                  color: colors.textSecondary,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
+              placeholder="Algo sobre vos..."
+              placeholderTextColor={colors.textSecondary}
+              multiline
+              numberOfLines={2}
+            />
+          ) : node?.bio ? (
+            <Text style={[styles.userBio, { color: colors.textSecondary }]}>
+              {node.bio}
+            </Text>
+          ) : null}
+
+          {/* Plan badge */}
+          <View
+            style={[
+              styles.planBadge,
+              { backgroundColor: planColor + "18", borderColor: planColor + "40" },
+            ]}
+          >
+            <Feather
+              name={
+                node?.networkPlan === "pro"
+                  ? "zap"
+                  : node?.networkPlan === "basic"
+                  ? "star"
+                  : "user"
+              }
+              size={12}
+              color={planColor}
+            />
+            <Text style={[styles.planBadgeText, { color: planColor }]}>{planLabel}</Text>
+          </View>
+        </LinearGradient>
       </View>
 
-      {/* Avatar */}
-      <View style={styles.avatarSection}>
-        <View style={[styles.avatar, { backgroundColor: colors.tint }]}>
-          <Text style={styles.avatarLetter}>
-            {(node?.name ?? "U")[0].toUpperCase()}
-          </Text>
-        </View>
-        {editing ? (
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            style={[
-              styles.nameInput,
-              { color: colors.text, borderBottomColor: colors.tint },
-            ]}
-            placeholder="Tu nombre"
-            placeholderTextColor={colors.textSecondary}
-            textAlign="center"
-            autoFocus
-          />
-        ) : (
-          <Text style={[styles.userName, { color: colors.text }]}>
-            {node?.name ?? "Mi Identidad"}
-          </Text>
-        )}
-        {editing ? (
-          <TextInput
-            value={bio}
-            onChangeText={setBio}
-            style={[
-              styles.bioInput,
-              {
-                color: colors.textSecondary,
-                borderColor: colors.border,
-                backgroundColor: colors.backgroundCard,
-              },
-            ]}
-            placeholder="Algo sobre vos..."
-            placeholderTextColor={colors.textSecondary}
-            multiline
-            numberOfLines={2}
-          />
-        ) : node?.bio ? (
-          <Text style={[styles.userBio, { color: colors.textSecondary }]}>
-            {node.bio}
-          </Text>
-        ) : null}
-      </View>
-
-      {/* Stats */}
+      {/* Stats row */}
       <View
         style={[
           styles.statsRow,
-          { backgroundColor: colors.backgroundCard, borderColor: colors.border },
+          {
+            backgroundColor: colors.backgroundCard,
+            borderColor: colors.border,
+            marginHorizontal: Spacing.md,
+            marginBottom: 24,
+          },
+          Shadows.sm,
         ]}
       >
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>
-            {documents.length}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            Documentos
-          </Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>
-            {docsByCat.length}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            Categorías
-          </Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Text
-            style={[
-              styles.statValue,
-              {
-                color:
-                  node?.networkPlan !== "free"
-                    ? colors.success
-                    : colors.textSecondary,
-              },
-            ]}
-          >
-            {node?.networkPlan !== "free" ? "Activa" : "Básica"}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            Conexión
-          </Text>
-        </View>
+        {[
+          { value: String(documents.length), label: "Documentos", color: "#1A6FE8" },
+          { value: String(docsByCat.length), label: "Categorías", color: "#7C3AED" },
+          {
+            value: node?.networkPlan !== "free" ? "Activa" : "Local",
+            label: "Cobertura",
+            color: node?.networkPlan !== "free" ? colors.success : colors.textSecondary,
+          },
+        ].map((s, i, arr) => (
+          <React.Fragment key={s.label}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{s.label}</Text>
+            </View>
+            {i < arr.length - 1 && (
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+            )}
+          </React.Fragment>
+        ))}
       </View>
 
-      {/* Info */}
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>
-        Información de cuenta
-      </Text>
+      {/* Account info */}
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Información de cuenta</Text>
       <View
         style={[
           styles.card,
-          { backgroundColor: colors.backgroundCard, borderColor: colors.border },
+          { backgroundColor: colors.backgroundCard, borderColor: colors.border, marginBottom: 24 },
+          Shadows.sm,
         ]}
       >
         {infoRows.map((row, i) => (
           <View key={row.label}>
             <View style={styles.infoRow}>
-              <View
-                style={[styles.infoIcon, { backgroundColor: colors.background }]}
-              >
-                <Feather name={row.icon as any} size={15} color={colors.tint} />
+              <View style={[styles.infoIcon, { backgroundColor: row.color + "15" }]}>
+                <Feather name={row.icon as any} size={15} color={row.color} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
                   {row.label}
                 </Text>
-                <Text style={[styles.infoValue, { color: colors.text }]}>
-                  {row.value}
-                </Text>
+                <Text style={[styles.infoValue, { color: colors.text }]}>{row.value}</Text>
               </View>
             </View>
             {i < infoRows.length - 1 && (
-              <View
-                style={[styles.separator, { backgroundColor: colors.border }]}
-              />
+              <View style={[styles.separator, { backgroundColor: colors.border }]} />
             )}
           </View>
         ))}
@@ -232,56 +274,44 @@ export default function ProfileScreen() {
       {/* Docs by category */}
       {docsByCat.length > 0 && (
         <>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Mis documentos por tipo
-          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Por categoría</Text>
           <View
             style={[
               styles.card,
-              { backgroundColor: colors.backgroundCard, borderColor: colors.border },
+              { backgroundColor: colors.backgroundCard, borderColor: colors.border, marginBottom: 24 },
+              Shadows.sm,
             ]}
           >
             {docsByCat.map((cat, i) => (
               <View key={cat.key}>
-                <Pressable
+                <AnimatedPressable
                   onPress={() =>
                     router.push({
                       pathname: "/(tabs)/documents",
                       params: { category: cat.key },
                     })
                   }
-                  style={styles.catRow}
+                  scale={0.98}
                 >
-                  <View
-                    style={[
-                      styles.catDot,
-                      { backgroundColor: cat.color + "20" },
-                    ]}
-                  >
-                    <Feather
-                      name={cat.icon as any}
-                      size={15}
-                      color={cat.color}
-                    />
+                  <View style={styles.catRow}>
+                    <View
+                      style={[styles.catDot, { backgroundColor: cat.color + "18" }]}
+                    >
+                      <Feather name={cat.icon as any} size={15} color={cat.color} />
+                    </View>
+                    <Text style={[styles.catRowLabel, { color: colors.text }]}>
+                      {cat.label}
+                    </Text>
+                    <View style={[styles.catCountBadge, { backgroundColor: cat.color + "18" }]}>
+                      <Text style={[styles.catCountBadgeText, { color: cat.color }]}>
+                        {cat.count}
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={15} color={colors.textSecondary} />
                   </View>
-                  <Text style={[styles.catRowLabel, { color: colors.text }]}>
-                    {cat.label}
-                  </Text>
-                  <Text
-                    style={[styles.catRowCount, { color: colors.textSecondary }]}
-                  >
-                    {cat.count}
-                  </Text>
-                  <Feather
-                    name="chevron-right"
-                    size={15}
-                    color={colors.textSecondary}
-                  />
-                </Pressable>
+                </AnimatedPressable>
                 {i < docsByCat.length - 1 && (
-                  <View
-                    style={[styles.separator, { backgroundColor: colors.border }]}
-                  />
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
                 )}
               </View>
             ))}
@@ -291,37 +321,56 @@ export default function ProfileScreen() {
 
       {/* Upgrade CTA */}
       {node?.networkPlan === "free" && (
-        <Pressable
-          onPress={() => router.push("/(tabs)/network")}
-          style={({ pressed }) => [
-            styles.upgradeCTA,
-            { borderColor: colors.tint + "60", opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <Feather name="share-2" size={20} color="#00D4FF" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.upgradeCTATitle}>Ampliar mi cobertura</Text>
-            <Text style={styles.upgradeCTASub}>
-              Usá tu identidad en bancos, hospitales, aeropuertos y más
-            </Text>
-          </View>
-          <Feather name="arrow-right" size={18} color="#00D4FF" />
-        </Pressable>
+        <>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Expandir cobertura</Text>
+          <AnimatedPressable
+            onPress={() => router.push("/(tabs)/network")}
+            style={{ marginHorizontal: Spacing.md, marginBottom: 24 }}
+            scale={0.97}
+          >
+            <LinearGradient
+              colors={isDark ? ["#0A1628", "#0D1E3D"] : ["#EEF4FF", "#E0ECFF"]}
+              style={[styles.upgradeCTA, { borderColor: "#1A6FE840" }]}
+            >
+              <View style={[styles.upgradeIcon, { backgroundColor: "#1A6FE820" }]}>
+                <Feather name="share-2" size={20} color="#00D4FF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.upgradeCTATitle, { color: colors.text }]}>
+                  Ampliar mi cobertura
+                </Text>
+                <Text style={[styles.upgradeCTASub, { color: colors.textSecondary }]}>
+                  Bancos, hospitales, aeropuertos y más
+                </Text>
+              </View>
+              <Feather name="arrow-right" size={18} color="#00D4FF" />
+            </LinearGradient>
+          </AnimatedPressable>
+        </>
       )}
 
       {/* Language selector */}
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.language}</Text>
-      <View style={[styles.card, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: colors.backgroundCard, borderColor: colors.border, marginBottom: 24 },
+          Shadows.sm,
+        ]}
+      >
         {LANGUAGES.map((l, i) => (
           <View key={l.code}>
-            <Pressable
-              onPress={() => setLang(l.code)}
-              style={({ pressed }) => [styles.langRow, { opacity: pressed ? 0.7 : 1 }]}
-            >
-              <Text style={styles.langFlag}>{l.flag}</Text>
-              <Text style={[styles.langLabel, { color: colors.text, flex: 1 }]}>{l.label}</Text>
-              {lang === l.code && <Feather name="check" size={18} color={colors.tint} />}
-            </Pressable>
+            <AnimatedPressable onPress={() => setLang(l.code)} scale={0.98}>
+              <View style={styles.langRow}>
+                <Text style={styles.langFlag}>{l.flag}</Text>
+                <Text style={[styles.langLabel, { color: colors.text, flex: 1 }]}>{l.label}</Text>
+                {lang === l.code && (
+                  <View style={[styles.langCheck, { backgroundColor: colors.tint + "18" }]}>
+                    <Feather name="check" size={14} color={colors.tint} />
+                  </View>
+                )}
+              </View>
+            </AnimatedPressable>
             {i < LANGUAGES.length - 1 && (
               <View style={[styles.separator, { backgroundColor: colors.border }]} />
             )}
@@ -329,7 +378,7 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      {/* Company footer */}
+      {/* Footer */}
       <View style={styles.companyFooter}>
         <View style={styles.companyBadge}>
           <Feather name="hexagon" size={14} color="#00D4FF" />
@@ -339,7 +388,7 @@ export default function ProfileScreen() {
           Infraestructura de identidad digital
         </Text>
         <Text style={[styles.companyVersion, { color: colors.textSecondary }]}>
-          uni.id v1.0 · © 2026 human.id labs
+          uni.id v1.0 · © 2026
         </Text>
       </View>
     </ScrollView>
@@ -352,8 +401,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    marginBottom: 24,
+    paddingHorizontal: Spacing.md,
+    marginBottom: 20,
   },
   title: { fontSize: 26, fontFamily: "Inter_700Bold" },
   editBtn: {
@@ -361,18 +410,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 9,
+    borderRadius: Radii.pill,
     borderWidth: 1,
   },
   editBtnText: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  avatarSection: { alignItems: "center", marginBottom: 28, gap: 10 },
+
+  profileHeroInner: {
+    borderRadius: Radii.card,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: "center",
+    gap: 10,
+  },
+  profileHero: {},
   avatar: {
     width: 88,
     height: 88,
     borderRadius: 44,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 4,
   },
   avatarLetter: { color: "#fff", fontSize: 36, fontFamily: "Inter_700Bold" },
   userName: { fontSize: 22, fontFamily: "Inter_700Bold" },
@@ -380,7 +438,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
+    lineHeight: 20,
   },
   nameInput: {
     fontSize: 22,
@@ -394,36 +453,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: Radii.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    width: "80%",
+    width: "85%",
     textAlign: "center",
   },
+  planBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: Radii.pill,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  planBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+
   statsRow: {
     flexDirection: "row",
-    marginHorizontal: 20,
-    borderRadius: 16,
+    borderRadius: Radii.lg,
     borderWidth: 1,
     padding: 16,
-    marginBottom: 28,
   },
   statItem: { flex: 1, alignItems: "center", gap: 4 },
   statValue: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  statLabel: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
   statDivider: { width: 1, marginVertical: 4 },
+
   sectionTitle: {
     fontSize: 16,
     fontFamily: "Inter_700Bold",
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing.md,
     marginBottom: 10,
   },
   card: {
-    marginHorizontal: 20,
-    borderRadius: 16,
+    marginHorizontal: Spacing.md,
+    borderRadius: Radii.lg,
     borderWidth: 1,
-    padding: 4,
-    marginBottom: 24,
+    overflow: "hidden",
   },
   infoRow: {
     flexDirection: "row",
@@ -434,13 +503,14 @@ const styles = StyleSheet.create({
   infoIcon: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: Radii.sm + 2,
     alignItems: "center",
     justifyContent: "center",
   },
   infoLabel: { fontSize: 11, fontFamily: "Inter_400Regular", marginBottom: 2 },
   infoValue: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   separator: { height: 1, marginHorizontal: 14 },
+
   catRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -448,43 +518,53 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   catDot: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: Radii.sm + 2,
     alignItems: "center",
     justifyContent: "center",
   },
   catRowLabel: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
-  catRowCount: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  catCountBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: Radii.pill,
+  },
+  catCountBadgeText: { fontSize: 12, fontFamily: "Inter_700Bold" },
+
   upgradeCTA: {
-    marginHorizontal: 20,
-    borderRadius: 16,
+    borderRadius: Radii.xl,
     borderWidth: 1,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: "#0D1525",
   },
-  upgradeCTATitle: {
-    color: "#fff",
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    marginBottom: 2,
-  },
-  upgradeCTASub: { color: "#8896B0", fontSize: 12, fontFamily: "Inter_400Regular" },
-  langRow: {
-    flexDirection: "row",
+  upgradeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: "center",
-    gap: 12,
-    padding: 14,
+    justifyContent: "center",
   },
+  upgradeCTATitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
+  upgradeCTASub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+
+  langRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
   langFlag: { fontSize: 22 },
   langLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  langCheck: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   companyFooter: {
     alignItems: "center",
     paddingVertical: 28,
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing.md,
     gap: 6,
     marginTop: 8,
   },

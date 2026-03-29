@@ -13,7 +13,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AnimatedPressable } from "@/components/ui/AnimatedPressable";
 import Colors from "@/constants/colors";
+import { Radii, Shadows, Spacing } from "@/constants/design";
 import { CATEGORIES, Document, DocumentCategory, useIdentity } from "@/context/IdentityContext";
 
 export default function DocumentsScreen() {
@@ -37,38 +39,84 @@ export default function DocumentsScreen() {
     return matchCat && matchSearch;
   });
 
-  const renderDoc = ({ item }: { item: Document }) => {
+  const allCategories = [
+    {
+      key: "all",
+      label: "Todos",
+      icon: "grid",
+      sfIcon: "square.grid.2x2",
+      color: "#718096",
+      count: documents.length,
+    },
+    ...CATEGORIES.map((c) => ({
+      ...c,
+      count: documents.filter((d) => d.category === c.key).length,
+    })),
+  ];
+
+  const renderDoc = ({ item, index }: { item: Document; index: number }) => {
     const cat = CATEGORIES.find((c) => c.key === item.category);
     return (
-      <Pressable
+      <AnimatedPressable
         onPress={() => router.push({ pathname: "/document/[id]", params: { id: item.id } })}
-        style={({ pressed }) => [
-          styles.docCard,
-          {
-            backgroundColor: colors.backgroundCard,
-            borderColor: colors.border,
-            opacity: pressed ? 0.8 : 1,
-          },
-        ]}
+        style={{ marginBottom: index < filtered.length - 1 ? 10 : 0 }}
+        scale={0.97}
       >
-        <View style={[styles.docIcon, { backgroundColor: (cat?.color ?? "#1A6FE8") + "18" }]}>
-          <Feather name={(cat?.icon as any) ?? "file"} size={22} color={cat?.color ?? "#1A6FE8"} />
-        </View>
-        <View style={styles.docInfo}>
-          <Text style={[styles.docTitle, { color: colors.text }]} numberOfLines={1}>
-            {item.title}
-          </Text>
-          {item.description ? (
-            <Text style={[styles.docDesc, { color: colors.textSecondary }]} numberOfLines={1}>
-              {item.description}
+        <View
+          style={[
+            styles.docCard,
+            {
+              backgroundColor: colors.backgroundCard,
+              borderColor: colors.border,
+            },
+            Shadows.sm,
+          ]}
+        >
+          <View
+            style={[
+              styles.docIcon,
+              { backgroundColor: (cat?.color ?? "#1A6FE8") + (isDark ? "25" : "18") },
+            ]}
+          >
+            <Feather
+              name={(cat?.icon as any) ?? "file"}
+              size={22}
+              color={cat?.color ?? "#1A6FE8"}
+            />
+          </View>
+          <View style={styles.docInfo}>
+            <Text style={[styles.docTitle, { color: colors.text }]} numberOfLines={1}>
+              {item.title}
             </Text>
-          ) : null}
-          <Text style={[styles.docMeta, { color: colors.textSecondary }]}>
-            {cat?.label} · {new Date(item.updatedAt).toLocaleDateString("es-AR")}
-          </Text>
+            {item.description ? (
+              <Text
+                style={[styles.docDesc, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {item.description}
+              </Text>
+            ) : null}
+            <View style={styles.docMeta}>
+              <View
+                style={[styles.catChipSmall, { backgroundColor: (cat?.color ?? "#1A6FE8") + "18" }]}
+              >
+                <Text style={[styles.catChipSmallText, { color: cat?.color ?? "#1A6FE8" }]}>
+                  {cat?.label ?? "Documento"}
+                </Text>
+              </View>
+              <Text style={[styles.docDate, { color: colors.textSecondary }]}>
+                {new Date(item.updatedAt).toLocaleDateString("es-AR", {
+                  day: "numeric",
+                  month: "short",
+                })}
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.docChevron, { backgroundColor: colors.background }]}>
+            <Feather name="chevron-right" size={15} color={colors.textSecondary} />
+          </View>
         </View>
-        <Feather name="chevron-right" size={18} color={colors.textSecondary} />
-      </Pressable>
+      </AnimatedPressable>
     );
   };
 
@@ -79,36 +127,50 @@ export default function DocumentsScreen() {
         style={[
           styles.header,
           {
-            paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 16,
+            paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 12,
             backgroundColor: colors.background,
           },
         ]}
       >
-        <Text style={[styles.title, { color: colors.text }]}>Documentos</Text>
-        <Pressable
-          onPress={() => router.push("/add-document")}
-          style={({ pressed }) => [
-            styles.addBtn,
-            { backgroundColor: colors.tint, opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <Feather name="plus" size={20} color="#fff" />
-        </Pressable>
+        <View>
+          <Text style={[styles.title, { color: colors.text }]}>Documentos</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            {documents.length} documento{documents.length !== 1 ? "s" : ""} guardado
+            {documents.length !== 1 ? "s" : ""}
+          </Text>
+        </View>
+        <AnimatedPressable onPress={() => router.push("/add-document")} scale={0.9}>
+          <View style={[styles.addBtn, { backgroundColor: colors.tint }, Shadows.colored(colors.tint)]}>
+            <Feather name="plus" size={20} color="#fff" />
+          </View>
+        </AnimatedPressable>
       </View>
 
-      {/* Search */}
-      <View style={[styles.searchWrap, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
-        <Feather name="search" size={16} color={colors.textSecondary} />
+      {/* Search bar */}
+      <View
+        style={[
+          styles.searchWrap,
+          {
+            backgroundColor: colors.backgroundCard,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <Feather name="search" size={17} color={colors.textSecondary} />
         <TextInput
           value={search}
           onChangeText={setSearch}
           placeholder="Buscar documentos..."
           placeholderTextColor={colors.textSecondary}
           style={[styles.searchInput, { color: colors.text }]}
+          returnKeyType="search"
         />
         {!!search && (
-          <Pressable onPress={() => setSearch("")}>
-            <Feather name="x" size={16} color={colors.textSecondary} />
+          <Pressable
+            onPress={() => setSearch("")}
+            style={[styles.clearBtn, { backgroundColor: colors.background }]}
+          >
+            <Feather name="x" size={13} color={colors.textSecondary} />
           </Pressable>
         )}
       </View>
@@ -117,57 +179,101 @@ export default function DocumentsScreen() {
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
-        data={[{ key: "all", label: "Todos", icon: "grid", sfIcon: "square.grid.2x2", color: "#718096" }, ...CATEGORIES]}
+        data={allCategories}
         keyExtractor={(item) => item.key}
         contentContainerStyle={styles.catList}
         renderItem={({ item }) => {
           const isActive = selectedCat === item.key;
           return (
-            <Pressable
+            <AnimatedPressable
               onPress={() => setSelectedCat(item.key as DocumentCategory | "all")}
-              style={[
-                styles.catChip,
-                isActive
-                  ? { backgroundColor: item.color, borderColor: item.color }
-                  : { backgroundColor: colors.backgroundCard, borderColor: colors.border },
-              ]}
+              scale={0.93}
             >
-              <Feather
-                name={item.icon as any}
-                size={13}
-                color={isActive ? "#fff" : colors.textSecondary}
-              />
-              <Text
+              <View
                 style={[
-                  styles.catChipText,
-                  { color: isActive ? "#fff" : colors.textSecondary },
+                  styles.catChip,
+                  isActive
+                    ? { backgroundColor: item.color, borderColor: item.color }
+                    : { backgroundColor: colors.backgroundCard, borderColor: colors.border },
                 ]}
               >
-                {item.label}
-              </Text>
-            </Pressable>
+                <Feather
+                  name={item.icon as any}
+                  size={12}
+                  color={isActive ? "#fff" : colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.catChipText,
+                    { color: isActive ? "#fff" : colors.textSecondary },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+                {item.count > 0 && (
+                  <View
+                    style={[
+                      styles.chipCount,
+                      {
+                        backgroundColor: isActive
+                          ? "rgba(255,255,255,0.25)"
+                          : colors.background,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipCountText,
+                        { color: isActive ? "#fff" : colors.textSecondary },
+                      ]}
+                    >
+                      {item.count}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </AnimatedPressable>
           );
         }}
       />
 
-      {/* List */}
+      {/* Document list */}
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={renderDoc}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 100 },
+          { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 110 },
         ]}
-        scrollEnabled={!!filtered.length}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Feather name="folder" size={40} color={colors.textSecondary} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>Sin documentos</Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {search ? "Ningún resultado para tu búsqueda" : "Tocá + para agregar un documento"}
+            <View
+              style={[styles.emptyIconWrap, { backgroundColor: colors.backgroundCard }]}
+            >
+              <Feather name="folder" size={32} color={colors.textSecondary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>
+              {search ? "Sin resultados" : "Sin documentos"}
             </Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {search
+                ? `No encontramos nada para "${search}"`
+                : "Tocá + para agregar tu primer documento"}
+            </Text>
+            {!search && (
+              <AnimatedPressable
+                onPress={() => router.push("/add-document")}
+                scale={0.95}
+                style={{ marginTop: 8 }}
+              >
+                <View style={[styles.emptyBtn, { backgroundColor: colors.tint }]}>
+                  <Feather name="plus" size={16} color="#fff" />
+                  <Text style={styles.emptyBtnText}>Agregar documento</Text>
+                </View>
+              </AnimatedPressable>
+            )}
           </View>
         }
       />
@@ -181,14 +287,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
   },
   title: { fontSize: 26, fontFamily: "Inter_700Bold" },
+  subtitle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
   addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: Radii.pill,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -196,12 +303,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginHorizontal: 20,
+    marginHorizontal: Spacing.md,
     marginBottom: 12,
-    borderRadius: 12,
+    borderRadius: Radii.lg,
     borderWidth: 1,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
   },
   searchInput: {
     flex: 1,
@@ -209,38 +316,85 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     padding: 0,
   },
-  catList: { paddingHorizontal: 20, gap: 8, marginBottom: 16 },
+  clearBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  catList: { paddingHorizontal: Spacing.md, gap: 8, marginBottom: 14, paddingRight: Spacing.md },
   catChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingVertical: 7,
+    borderRadius: Radii.pill,
     borderWidth: 1,
   },
   catChipText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  listContent: { paddingHorizontal: 20, gap: 10 },
+  chipCount: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  chipCountText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  listContent: { paddingHorizontal: Spacing.md },
   docCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
     padding: 14,
-    borderRadius: 14,
+    borderRadius: Radii.lg,
     borderWidth: 1,
   },
   docIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  docInfo: { flex: 1 },
-  docTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
-  docDesc: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 2 },
-  docMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  empty: { paddingTop: 60, alignItems: "center", gap: 10 },
-  emptyTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
+  docInfo: { flex: 1, gap: 3 },
+  docTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  docDesc: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  docMeta: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
+  catChipSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radii.pill,
+  },
+  catChipSmallText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  docDate: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  docChevron: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  empty: { paddingTop: 60, alignItems: "center", gap: 12, paddingHorizontal: 32 },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  emptyTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  emptyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: Radii.pill,
+  },
+  emptyBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });

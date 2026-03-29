@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -12,8 +13,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
+import { Radii, Shadows, Spacing } from "@/constants/design";
 import { useIdentity } from "@/context/IdentityContext";
-import { useLanguage } from "@/context/LanguageContext";
 
 interface SecurityEvent {
   id: string;
@@ -33,55 +34,25 @@ const MOCK_EVENTS: SecurityEvent[] = [
 ];
 
 const LAYERS = [
-  {
-    id: "user",
-    label: "Usuario",
-    sublabel: "Wallet uni.id / Humanidad",
-    icon: "user",
-    color: "#1A6FE8",
-    description: "Tu identidad digital única en la red",
-  },
-  {
-    id: "identity",
-    label: "Red de Identidad",
-    sublabel: "Nodos distribuidos globalmente",
-    icon: "share-2",
-    color: "#7C3AED",
-    description: "Red descentralizada de verificación de identidad",
-  },
-  {
-    id: "security",
-    label: "Capa de Seguridad",
-    sublabel: "Sistema inmunológico digital",
-    icon: "shield",
-    color: "#00D4FF",
-    description: "Aprende y se protege sola detectando anomalías",
-  },
-  {
-    id: "infra",
-    label: "Infraestructura Global",
-    sublabel: "Servidores distribuidos y cifrado E2E",
-    icon: "globe",
-    color: "#38A169",
-    description: "Capa base de infraestructura distribuida y encriptada",
-  },
+  { id: "user", label: "Usuario", sublabel: "Wallet uni.id", icon: "user", color: "#1A6FE8" },
+  { id: "identity", label: "Red de Identidad", sublabel: "Nodos distribuidos globalmente", icon: "share-2", color: "#7C3AED" },
+  { id: "security", label: "Capa de Seguridad", sublabel: "Sistema inmunológico digital", icon: "shield", color: "#00D4FF" },
+  { id: "infra", label: "Infraestructura Global", sublabel: "Cifrado E2E distribuido", icon: "globe", color: "#38A169" },
 ];
 
-function PulseCircle({ color, size, delay }: { color: string; size: number; delay: number }) {
+function PulseRing({ color, size, delay }: { color: string; size: number; delay: number }) {
   const anim = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
-        Animated.timing(anim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1, duration: 2000, useNativeDriver: true }),
         Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
       ])
     );
     loop.start();
     return () => loop.stop();
   }, []);
-
   return (
     <Animated.View
       style={{
@@ -89,67 +60,62 @@ function PulseCircle({ color, size, delay }: { color: string; size: number; dela
         width: size,
         height: size,
         borderRadius: size / 2,
-        borderWidth: 1.5,
+        borderWidth: 1,
         borderColor: color,
-        opacity: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.8, 0.2, 0] }),
-        transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [1, 2] }) }],
+        opacity: anim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.7, 0.15, 0] }),
+        transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.9] }) }],
       }}
     />
   );
 }
 
-function ThreatScore({ score }: { score: number }) {
+function ThreatBar({ score }: { score: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(anim, { toValue: score, duration: 1200, useNativeDriver: false }).start();
+    Animated.timing(anim, { toValue: score, duration: 1400, useNativeDriver: false }).start();
   }, [score]);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-
+  const barColor = score < 30 ? colors.success : score < 70 ? "#D69E2E" : colors.danger;
   return (
-    <View style={threatStyles.wrap}>
-      <View style={[threatStyles.bar, { backgroundColor: colors.border }]}>
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_400Regular" }}>
+          {score < 30 ? "Amenaza baja" : score < 70 ? "Amenaza moderada" : "Amenaza alta"}
+        </Text>
+        <Text style={{ color: barColor, fontSize: 15, fontFamily: "Inter_700Bold" }}>{score}%</Text>
+      </View>
+      <View style={{ height: 8, borderRadius: 4, overflow: "hidden", backgroundColor: colors.border }}>
         <Animated.View
-          style={[
-            threatStyles.fill,
-            {
-              width: anim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] }),
-              backgroundColor: score < 30 ? colors.success : score < 70 ? "#D69E2E" : colors.danger,
-            },
-          ]}
+          style={{
+            height: "100%",
+            borderRadius: 4,
+            backgroundColor: barColor,
+            width: anim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] }),
+          }}
         />
       </View>
-      <Text style={[threatStyles.label, { color: colors.textSecondary }]}>
-        {score < 30 ? "Amenaza baja" : score < 70 ? "Amenaza moderada" : "Amenaza alta"}
-      </Text>
     </View>
   );
 }
-
-const threatStyles = StyleSheet.create({
-  wrap: { gap: 6 },
-  bar: { height: 6, borderRadius: 3, overflow: "hidden" },
-  fill: { height: "100%", borderRadius: 3 },
-  label: { fontSize: 11, fontFamily: "Inter_400Regular" },
-});
 
 export default function SecurityScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { node, documents } = useIdentity();
-  const { t } = useLanguage();
+  const { documents } = useIdentity();
   const [threatLevel] = useState(12);
+
   const nodeCount = 147382;
   const protectedCount = 8241;
 
-  const eventIcon: Record<SecurityEvent["type"], { name: string; color: string }> = {
-    blocked: { name: "shield", color: colors.danger },
-    learned: { name: "cpu", color: colors.tint },
-    protected: { name: "check-circle", color: colors.success },
-    scan: { name: "activity", color: "#D69E2E" },
+  const eventMeta: Record<SecurityEvent["type"], { icon: string; color: string }> = {
+    blocked: { icon: "shield", color: colors.danger },
+    learned: { icon: "cpu", color: colors.tint },
+    protected: { icon: "check-circle", color: colors.success },
+    scan: { icon: "activity", color: "#D69E2E" },
   };
 
   return (
@@ -158,159 +124,231 @@ export default function SecurityScreen() {
       contentInsetAdjustmentBehavior="automatic"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
-        paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 16,
-        paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 100,
-        gap: 24,
+        paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 12,
+        paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 110,
+        gap: 20,
       }}
     >
       {/* Header */}
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, { paddingHorizontal: Spacing.md }]}>
         <View>
           <Text style={[styles.title, { color: colors.text }]}>Seguridad</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Sistema inmunológico digital
           </Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: colors.success + "20", borderColor: colors.success + "60" }]}>
+        <View
+          style={[
+            styles.statusBadge,
+            { backgroundColor: colors.success + "18", borderColor: colors.success + "50" },
+          ]}
+        >
           <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
           <Text style={[styles.statusText, { color: colors.success }]}>Activo</Text>
         </View>
       </View>
 
-      {/* Live node visualization */}
-      <View style={[styles.vizCard, { backgroundColor: isDark ? "#060B18" : "#EEF4FF", borderColor: colors.border }]}>
-        <View style={styles.nodeCenter}>
-          <PulseCircle color="#00D4FF" size={60} delay={0} />
-          <PulseCircle color="#1A6FE8" size={60} delay={600} />
-          <PulseCircle color="#7C3AED" size={60} delay={1200} />
-          <View style={[styles.nodeDot, { backgroundColor: colors.tint }]}>
-            <Feather name="shield" size={22} color="#fff" />
+      {/* Live visualization card */}
+      <View style={{ paddingHorizontal: Spacing.md }}>
+        <LinearGradient
+          colors={isDark ? ["#060B18", "#0A1628"] : ["#EEF4FF", "#F5F8FF"]}
+          style={[styles.vizCard, { borderColor: colors.border }, Shadows.md]}
+        >
+          {/* Pulsing rings */}
+          <View style={styles.nodeCenter}>
+            <PulseRing color="#00D4FF" size={80} delay={0} />
+            <PulseRing color="#1A6FE8" size={80} delay={700} />
+            <PulseRing color="#7C3AED" size={80} delay={1400} />
+            <LinearGradient
+              colors={["#1A6FE8", "#0D8AEB"]}
+              style={styles.nodeDot}
+            >
+              <Feather name="shield" size={24} color="#fff" />
+            </LinearGradient>
           </View>
-        </View>
-        <View style={styles.vizStats}>
-          <View style={styles.vizStat}>
-            <Text style={[styles.vizNum, { color: colors.text }]}>{nodeCount.toLocaleString("es-AR")}</Text>
-            <Text style={[styles.vizLabel, { color: colors.textSecondary }]}>Nodos en red</Text>
+
+          {/* Stats */}
+          <View style={styles.vizStats}>
+            <View style={styles.vizStat}>
+              <Text style={[styles.vizNum, { color: colors.text }]}>
+                {nodeCount.toLocaleString("es-AR")}
+              </Text>
+              <Text style={[styles.vizLabel, { color: colors.textSecondary }]}>Nodos en red</Text>
+            </View>
+            <View style={[styles.vizDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.vizStat}>
+              <Text style={[styles.vizNum, { color: colors.text }]}>
+                {protectedCount.toLocaleString("es-AR")}
+              </Text>
+              <Text style={[styles.vizLabel, { color: colors.textSecondary }]}>Protegidos hoy</Text>
+            </View>
+            <View style={[styles.vizDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.vizStat}>
+              <Text style={[styles.vizNum, { color: colors.text }]}>{documents.length}</Text>
+              <Text style={[styles.vizLabel, { color: colors.textSecondary }]}>Tus docs</Text>
+            </View>
           </View>
-          <View style={[styles.vizDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.vizStat}>
-            <Text style={[styles.vizNum, { color: colors.text }]}>{protectedCount.toLocaleString("es-AR")}</Text>
-            <Text style={[styles.vizLabel, { color: colors.textSecondary }]}>Protegidos hoy</Text>
-          </View>
-          <View style={[styles.vizDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.vizStat}>
-            <Text style={[styles.vizNum, { color: colors.text }]}>{documents.length}</Text>
-            <Text style={[styles.vizLabel, { color: colors.textSecondary }]}>Tus docs</Text>
-          </View>
-        </View>
+        </LinearGradient>
       </View>
 
       {/* Threat level */}
-      <View style={[styles.card, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
-        <View style={styles.cardHeader}>
-          <Feather name="activity" size={18} color={colors.tint} />
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Nivel de amenaza en tiempo real</Text>
+      <View style={{ paddingHorizontal: Spacing.md }}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.backgroundCard, borderColor: colors.border },
+            Shadows.sm,
+          ]}
+        >
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIconWrap, { backgroundColor: colors.tint + "18" }]}>
+              <Feather name="activity" size={16} color={colors.tint} />
+            </View>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>
+              Nivel de amenaza en tiempo real
+            </Text>
+          </View>
+          <ThreatBar score={threatLevel} />
+          <Text style={[styles.cardNote, { color: colors.textSecondary }]}>
+            La red aprendió y bloqueó 23 nuevos patrones en las últimas 24 hs.
+          </Text>
         </View>
-        <ThreatScore score={threatLevel} />
-        <Text style={[styles.cardNote, { color: colors.textSecondary }]}>
-          La red aprendió y bloqueó 23 patrones nuevos en las últimas 24 hs.
-        </Text>
       </View>
 
       {/* Architecture layers */}
-      <View style={styles.sectionHeader}>
+      <View style={{ paddingHorizontal: Spacing.md }}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Arquitectura de seguridad</Text>
-        <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>Capa adaptativa inteligente</Text>
-      </View>
-
-      <View style={[styles.layersCard, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
-        {LAYERS.map((layer, i) => (
-          <View key={layer.id}>
-            <View style={styles.layerRow}>
-              <View style={[styles.layerIcon, { backgroundColor: layer.color + "20" }]}>
-                <Feather name={layer.icon as any} size={18} color={layer.color} />
+        <View
+          style={[
+            styles.layersCard,
+            { backgroundColor: colors.backgroundCard, borderColor: colors.border },
+            Shadows.sm,
+          ]}
+        >
+          {LAYERS.map((layer, i) => (
+            <View key={layer.id}>
+              <View style={styles.layerRow}>
+                <View style={[styles.layerIcon, { backgroundColor: layer.color + "18" }]}>
+                  <Feather name={layer.icon as any} size={18} color={layer.color} />
+                </View>
+                <View style={styles.layerInfo}>
+                  <Text style={[styles.layerLabel, { color: colors.text }]}>{layer.label}</Text>
+                  <Text style={[styles.layerSub, { color: colors.textSecondary }]}>
+                    {layer.sublabel}
+                  </Text>
+                </View>
+                <View style={[styles.layerCheck, { backgroundColor: colors.success + "18" }]}>
+                  <Feather name="check" size={12} color={colors.success} />
+                </View>
               </View>
-              <View style={styles.layerInfo}>
-                <Text style={[styles.layerLabel, { color: colors.text }]}>{layer.label}</Text>
-                <Text style={[styles.layerSub, { color: colors.textSecondary }]}>{layer.sublabel}</Text>
-              </View>
-              <View style={[styles.layerCheck, { backgroundColor: colors.success + "20" }]}>
-                <Feather name="check" size={12} color={colors.success} />
-              </View>
-            </View>
-            {i < LAYERS.length - 1 && (
-              <View style={styles.layerArrow}>
-                <View style={[styles.arrowLine, { backgroundColor: colors.border }]} />
-                <Feather name="chevron-down" size={14} color={colors.border} />
-              </View>
-            )}
-          </View>
-        ))}
-      </View>
-
-      {/* Adaptive security explanation */}
-      <View style={[styles.adaptiveCard, { backgroundColor: isDark ? "#0A1628" : "#EEF4FF", borderColor: "#1A6FE840" }]}>
-        <View style={styles.adaptiveHeader}>
-          <Feather name="cpu" size={18} color={colors.tint} />
-          <Text style={[styles.adaptiveTitle, { color: colors.text }]}>Capa de Seguridad Adaptativa</Text>
-        </View>
-        <View style={styles.adaptiveSteps}>
-          {[
-            { icon: "alert-triangle", label: "Ataque detectado" },
-            { icon: "cpu", label: "Red aprende el patrón" },
-            { icon: "share-2", label: "Red protege otros nodos" },
-            { icon: "trending-up", label: "La seguridad mejora" },
-          ].map((step, i) => (
-            <View key={i} style={styles.adaptiveStep}>
-              <View style={[styles.adaptiveStepIcon, { backgroundColor: colors.tint + "20" }]}>
-                <Feather name={step.icon as any} size={14} color={colors.tint} />
-              </View>
-              <Text style={[styles.adaptiveStepText, { color: colors.text }]}>{step.label}</Text>
-              {i < 3 && <Feather name="arrow-right" size={12} color={colors.border} style={{ flex: 0 }} />}
+              {i < LAYERS.length - 1 && (
+                <View style={styles.layerConnector}>
+                  <View style={[styles.connectorLine, { backgroundColor: colors.border }]} />
+                </View>
+              )}
             </View>
           ))}
         </View>
-        <Text style={[styles.adaptiveNote, { color: colors.textSecondary }]}>
-          El sistema se comporta como un organismo vivo — detecta anomalías y refuerza su propia seguridad continuamente.
-        </Text>
       </View>
 
-      {/* Security events */}
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Actividad reciente</Text>
-      </View>
-      <View style={[styles.eventsCard, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
-        {MOCK_EVENTS.map((ev, i) => {
-          const ico = eventIcon[ev.type];
-          return (
-            <View key={ev.id}>
-              <View style={styles.eventRow}>
-                <View style={[styles.eventIcon, { backgroundColor: ico.color + "18" }]}>
-                  <Feather name={ico.name as any} size={15} color={ico.color} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.eventMsg, { color: colors.text }]}>{ev.message}</Text>
-                  <Text style={[styles.eventMeta, { color: colors.textSecondary }]}>
-                    {ev.node ? `${ev.node} · ` : ""}{ev.time}
+      {/* Adaptive security */}
+      <View style={{ paddingHorizontal: Spacing.md }}>
+        <LinearGradient
+          colors={isDark ? ["#0A1628", "#0D1E3D"] : ["#EEF4FF", "#E8F0FF"]}
+          style={[styles.adaptiveCard, { borderColor: "#1A6FE830" }, Shadows.sm]}
+        >
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIconWrap, { backgroundColor: "#1A6FE818" }]}>
+              <Feather name="cpu" size={16} color={colors.tint} />
+            </View>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>
+              Seguridad Adaptativa
+            </Text>
+          </View>
+          <View style={styles.adaptiveFlow}>
+            {[
+              { icon: "alert-triangle", label: "Ataque detectado", color: colors.danger },
+              { icon: "cpu", label: "Red aprende", color: colors.tint },
+              { icon: "share-2", label: "Protege nodos", color: "#7C3AED" },
+              { icon: "trending-up", label: "Mejora continua", color: colors.success },
+            ].map((step, i) => (
+              <React.Fragment key={i}>
+                <View style={styles.adaptiveStep}>
+                  <View style={[styles.adaptiveIcon, { backgroundColor: step.color + "18" }]}>
+                    <Feather name={step.icon as any} size={15} color={step.color} />
+                  </View>
+                  <Text style={[styles.adaptiveStepText, { color: colors.text }]}>
+                    {step.label}
                   </Text>
                 </View>
-              </View>
-              {i < MOCK_EVENTS.length - 1 && (
-                <View style={[styles.separator, { backgroundColor: colors.border }]} />
-              )}
-            </View>
-          );
-        })}
+                {i < 3 && (
+                  <Feather name="chevron-right" size={14} color={colors.border} />
+                )}
+              </React.Fragment>
+            ))}
+          </View>
+          <Text style={[styles.adaptiveNote, { color: colors.textSecondary }]}>
+            El sistema aprende de cada ataque y refuerza la seguridad de toda la red automáticamente.
+          </Text>
+        </LinearGradient>
       </View>
 
-      {/* E2E Encryption note */}
-      <View style={[styles.e2eCard, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
-        <Feather name="lock" size={18} color={colors.success} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.e2eTitle, { color: colors.text }]}>Cifrado de extremo a extremo</Text>
-          <Text style={[styles.e2eText, { color: colors.textSecondary }]}>
-            Todos tus documentos están cifrados con AES-256. Ni siquiera nosotros podemos acceder a tu contenido.
-          </Text>
+      {/* Activity feed */}
+      <View style={{ paddingHorizontal: Spacing.md }}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Actividad reciente</Text>
+        <View
+          style={[
+            styles.eventsCard,
+            { backgroundColor: colors.backgroundCard, borderColor: colors.border },
+            Shadows.sm,
+          ]}
+        >
+          {MOCK_EVENTS.map((ev, i) => {
+            const meta = eventMeta[ev.type];
+            return (
+              <View key={ev.id}>
+                <View style={styles.eventRow}>
+                  <View style={[styles.eventIcon, { backgroundColor: meta.color + "18" }]}>
+                    <Feather name={meta.icon as any} size={14} color={meta.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.eventMsg, { color: colors.text }]}>{ev.message}</Text>
+                    <Text style={[styles.eventMeta, { color: colors.textSecondary }]}>
+                      {ev.node ? `${ev.node} · ` : ""}{ev.time}
+                    </Text>
+                  </View>
+                </View>
+                {i < MOCK_EVENTS.length - 1 && (
+                  <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* E2E encryption */}
+      <View style={{ paddingHorizontal: Spacing.md }}>
+        <View
+          style={[
+            styles.e2eCard,
+            {
+              backgroundColor: colors.success + "10",
+              borderColor: colors.success + "30",
+            },
+          ]}
+        >
+          <View style={[styles.e2eIcon, { backgroundColor: colors.success + "18" }]}>
+            <Feather name="lock" size={18} color={colors.success} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.e2eTitle, { color: colors.text }]}>
+              Cifrado de extremo a extremo
+            </Text>
+            <Text style={[styles.e2eText, { color: colors.textSecondary }]}>
+              AES-256 · Ni nosotros podemos acceder a tu contenido.
+            </Text>
+          </View>
         </View>
       </View>
     </ScrollView>
@@ -319,12 +357,7 @@ export default function SecurityScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 20,
-  },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   title: { fontSize: 26, fontFamily: "Inter_700Bold", marginBottom: 2 },
   subtitle: { fontSize: 13, fontFamily: "Inter_400Regular" },
   statusBadge: {
@@ -333,71 +366,64 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: Radii.pill,
     borderWidth: 1,
   },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   statusText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+
   vizCard: {
-    marginHorizontal: 20,
-    borderRadius: 20,
+    borderRadius: Radii.card,
     borderWidth: 1,
     paddingVertical: 28,
+    paddingHorizontal: 20,
     alignItems: "center",
     gap: 24,
   },
   nodeCenter: {
-    width: 80,
-    height: 80,
+    width: 100,
+    height: 100,
     alignItems: "center",
     justifyContent: "center",
   },
   nodeDot: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     alignItems: "center",
     justifyContent: "center",
   },
-  vizStats: {
-    flexDirection: "row",
-    gap: 0,
-    width: "100%",
-    paddingHorizontal: 20,
-  },
+  vizStats: { flexDirection: "row", width: "100%" },
   vizStat: { flex: 1, alignItems: "center", gap: 4 },
   vizNum: { fontSize: 18, fontFamily: "Inter_700Bold" },
   vizLabel: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center" },
   vizDivider: { width: 1, marginVertical: 4 },
+
   card: {
-    marginHorizontal: 20,
-    borderRadius: 16,
+    borderRadius: Radii.lg,
     borderWidth: 1,
     padding: 18,
     gap: 14,
   },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
-  cardTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  cardNote: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
-  sectionHeader: { paddingHorizontal: 20, gap: 2 },
-  sectionTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
-  sectionSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  layersCard: {
-    marginHorizontal: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 8,
-  },
-  layerRow: {
-    flexDirection: "row",
+  cardIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: Radii.sm + 2,
     alignItems: "center",
-    gap: 14,
-    padding: 12,
+    justifyContent: "center",
   },
+  cardTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", flex: 1 },
+  cardNote: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+
+  sectionTitle: { fontSize: 17, fontFamily: "Inter_700Bold", marginBottom: 12 },
+
+  layersCard: { borderRadius: Radii.lg, borderWidth: 1, padding: 6 },
+  layerRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12 },
   layerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -405,70 +431,66 @@ const styles = StyleSheet.create({
   layerLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
   layerSub: { fontSize: 11, fontFamily: "Inter_400Regular" },
   layerCheck: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
   },
-  layerArrow: { alignItems: "center", paddingVertical: 2 },
-  arrowLine: { width: 1, height: 6, marginBottom: 0 },
+  layerConnector: { alignItems: "center", paddingVertical: 0 },
+  connectorLine: { width: 1, height: 8, marginLeft: 33 },
+
   adaptiveCard: {
-    marginHorizontal: 20,
-    borderRadius: 16,
+    borderRadius: Radii.lg,
     borderWidth: 1,
     padding: 18,
     gap: 14,
   },
-  adaptiveHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
-  adaptiveTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  adaptiveSteps: {
+  adaptiveFlow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
     alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
   },
-  adaptiveStep: { flexDirection: "row", alignItems: "center", gap: 6 },
-  adaptiveStepIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+  adaptiveStep: { alignItems: "center", gap: 5 },
+  adaptiveIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radii.sm + 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  adaptiveStepText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  adaptiveStepText: { fontSize: 10, fontFamily: "Inter_500Medium", textAlign: "center", maxWidth: 60 },
   adaptiveNote: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
-  eventsCard: {
-    marginHorizontal: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 4,
-  },
-  eventRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    padding: 14,
-  },
+
+  eventsCard: { borderRadius: Radii.lg, borderWidth: 1, overflow: "hidden" },
+  eventRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
   eventIcon: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: Radii.sm + 2,
     alignItems: "center",
     justifyContent: "center",
   },
   eventMsg: { fontSize: 14, fontFamily: "Inter_500Medium", marginBottom: 2 },
   eventMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
   separator: { height: 1, marginHorizontal: 14 },
+
   e2eCard: {
-    marginHorizontal: 20,
-    borderRadius: 16,
+    borderRadius: Radii.lg,
     borderWidth: 1,
     padding: 16,
     flexDirection: "row",
     gap: 14,
-    alignItems: "flex-start",
+    alignItems: "center",
   },
-  e2eTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
-  e2eText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  e2eIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  e2eTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
+  e2eText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
 });
