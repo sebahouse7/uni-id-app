@@ -12,3 +12,9 @@ id = "9GAlBdg1b2hnn3yz-TuCX"
 uri = "file://documentos/paquete_legal_human_id_labs.md"
 type = "text"
 title = "Paquete Legal Completo — human.id labs (Sebastián Monteleón)"
+
+[[outputs]]
+id = "flGmq641ciUhbw2vGTWQT"
+uri = "file://screenshots/email-preview.jpg"
+type = "image"
+title = "Preview de los emails — uni.id"
