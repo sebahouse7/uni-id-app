@@ -49,7 +49,22 @@ export default function OnboardingScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
   const { createNode } = useIdentity();
   const [current, setCurrent] = useState(0);
+  const [regError, setRegError] = useState<string | null>(null);
+  const [isRegistering, setIsRegistering] = useState(false);
   const flatRef = useRef<FlatList>(null);
+
+  const handleGetStarted = async () => {
+    setRegError(null);
+    setIsRegistering(true);
+    try {
+      await createNode({ name: "Mi Nodo", networkPlan: "free" });
+      router.replace("/(tabs)");
+    } catch (e: any) {
+      setRegError(e?.message ?? "Error al conectar con el servidor");
+    } finally {
+      setIsRegistering(false);
+    }
+  };
 
   const handleNext = () => {
     if (current < slides.length - 1) {
@@ -58,11 +73,6 @@ export default function OnboardingScreen() {
     } else {
       handleGetStarted();
     }
-  };
-
-  const handleGetStarted = async () => {
-    await createNode({ name: "Mi Nodo", networkPlan: "free" });
-    router.replace("/(tabs)");
   };
 
   return (
@@ -116,17 +126,25 @@ export default function OnboardingScreen() {
           ))}
         </View>
 
+        {regError ? (
+          <View style={styles.errorBox}>
+            <Feather name="alert-circle" size={16} color="#F87171" />
+            <Text style={styles.errorText}>{regError}</Text>
+          </View>
+        ) : null}
+
         <Pressable
           onPress={handleNext}
+          disabled={isRegistering}
           style={({ pressed }) => [
             styles.button,
-            { backgroundColor: colors.tint, opacity: pressed ? 0.85 : 1 },
+            { backgroundColor: colors.tint, opacity: isRegistering || pressed ? 0.7 : 1 },
           ]}
         >
           <Text style={styles.buttonText}>
-            {current === slides.length - 1 ? "Crear mi nodo" : "Continuar"}
+            {isRegistering ? "Conectando..." : current === slides.length - 1 ? "Crear mi nodo" : "Continuar"}
           </Text>
-          <Feather name={current === slides.length - 1 ? "zap" : "arrow-right"} size={20} color="#fff" />
+          <Feather name={isRegistering ? "loader" : current === slides.length - 1 ? "zap" : "arrow-right"} size={20} color="#fff" />
         </Pressable>
       </View>
     </View>
@@ -188,6 +206,19 @@ const styles = StyleSheet.create({
   },
   dots: { flexDirection: "row", gap: 6, alignItems: "center" },
   dot: { height: 8, borderRadius: 4 },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#2D0E0E",
+    borderColor: "#7F1D1D",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    width: "100%",
+  },
+  errorText: { color: "#F87171", fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
   button: {
     flexDirection: "row",
     alignItems: "center",

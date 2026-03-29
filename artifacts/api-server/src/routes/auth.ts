@@ -79,9 +79,10 @@ router.post(
 
       res.json({ accessToken, refreshToken, user, isNew });
     } catch (err: any) {
-      await recordFailedAttempt(ip, "/auth/register");
-      await log({ event: "auth.register_error", severity: "warn", ip, metadata: { error: err.message } });
-      res.status(500).json({ error: "Error al registrar" });
+      console.error("[REGISTER ERROR]", err?.message, err?.stack);
+      try { await recordFailedAttempt(ip, "/auth/register"); } catch {}
+      try { await log({ event: "auth.register_error", severity: "warn", ip, metadata: { error: err.message } }); } catch {}
+      res.status(500).json({ error: err?.message ?? "Error al registrar" });
     }
   }
 );

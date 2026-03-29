@@ -1,7 +1,8 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
-const BASE_URL = `https://${process.env["EXPO_PUBLIC_DOMAIN"]}/api-server/api`;
+const BASE_URL = process.env["EXPO_PUBLIC_API_URL"] ??
+  `https://${process.env["EXPO_PUBLIC_DOMAIN"]}:8080/api`;
 
 const KEYS = {
   ACCESS: "uni_access_token",
