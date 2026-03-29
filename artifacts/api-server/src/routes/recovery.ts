@@ -105,7 +105,9 @@ router.post(
       [user.id, codeHash, expiresAt]
     );
 
-    const emailContent = buildRecoveryEmail(code, lang ?? "es");
+    const emailContent = buildRecoveryEmail(code, lang ?? "es", {
+      ip: ip !== "unknown" ? ip : undefined,
+    });
     const result = await sendEmail({ to: email, ...emailContent });
 
     await log({

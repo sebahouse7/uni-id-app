@@ -18,3 +18,9 @@ id = "flGmq641ciUhbw2vGTWQT"
 uri = "file://screenshots/email-preview.jpg"
 type = "image"
 title = "Preview de los emails — uni.id"
+
+[[outputs]]
+id = "6lXka5tRTdZWSQe9UTDsR"
+uri = "file://screenshots/email-preview-v2.jpg"
+type = "image"
+title = "Email de recuperación mejorado — uni.id"

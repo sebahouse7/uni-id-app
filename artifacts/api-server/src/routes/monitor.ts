@@ -53,7 +53,10 @@ router.post("/email-test", requireAuth, async (req: any, res: Response) => {
   const target = req.body?.email ?? req.body?.to;
   if (!target) { res.status(400).json({ error: "Campo 'email' requerido" }); return; }
 
-  const content = buildRecoveryEmail("123456", req.body?.lang ?? "es");
+  const content = buildRecoveryEmail("123456", req.body?.lang ?? "es", {
+    ip: req.ip ?? "192.168.1.1",
+    device: "Samsung Galaxy S24 (Android)",
+  });
   const result = await sendEmail({ to: target, ...content });
 
   res.json({
