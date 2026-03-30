@@ -8,7 +8,7 @@ import { checkSmtpOnStartup } from "./lib/email";
 // Puerto: usa PORT del .env o 8080 como default
 const port = Math.abs(Number(process.env["PORT"] ?? 8080)) || 8080;
 
-app.listen(port, async () => {
+app.listen(port, "0.0.0.0", async () => {
   logger.info({ port }, "Server listening");
 
   // Validaciones de variables de entorno (advertencias, no crashes)
