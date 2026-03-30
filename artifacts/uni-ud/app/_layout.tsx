@@ -25,7 +25,11 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <LockScreen />;

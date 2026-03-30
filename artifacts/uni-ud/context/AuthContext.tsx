@@ -1,17 +1,31 @@
 import * as LocalAuthentication from "expo-local-authentication";
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { AppState, Platform } from "react-native";
 
-import { secureGet, secureSet, secureDelete } from "./SecureStorage";
+import { secureDelete, secureGet, secureSet } from "./SecureStorage";
+import {
+  clearPin,
+  getPin,
+  migrateOldPinKeys,
+  savePin,
+  validatePin,
+} from "@/lib/authService";
 
 const LOCK_TIMEOUT_MS = 3 * 60 * 1000;
-const PIN_KEY = "@uni_pin";
-const FAIL_COUNT_KEY = "@uni_pin_fails";
-const LOCKED_UNTIL_KEY = "@uni_pin_locked_until";
+const FAIL_COUNT_KEY = "uni_id_pin_fails_v1";
+const LOCKED_UNTIL_KEY = "uni_id_pin_locked_until_v1";
 const MAX_FAILS = 5;
 const LOCKOUT_DURATION_MS = 30 * 1000;
 
 interface AuthContextType {
+  isLoading: boolean;
   isLocked: boolean;
   isAuthenticated: boolean;
   hasBiometrics: boolean;
@@ -26,6 +40,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType>({
+  isLoading: true,
   isLocked: false,
   isAuthenticated: false,
   hasBiometrics: false,
@@ -40,6 +55,7 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasBiometrics, setHasBiometrics] = useState(false);
   const [hasPin, setHasPin] = useState(false);
@@ -47,43 +63,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [successState, setSuccessState] = useState(false);
+
   const lastActiveRef = useRef(Date.now());
   const appStateRef = useRef(AppState.currentState);
+  const biometricInProgressRef = useRef(false);
 
   useEffect(() => {
-    (async () => {
+    initAuth();
+  }, []);
+
+  async function initAuth() {
+    try {
       if (Platform.OS === "web") {
         setIsAuthenticated(true);
+        setIsLoading(false);
         return;
       }
+
+      await migrateOldPinKeys();
 
       const compatible = await LocalAuthentication.hasHardwareAsync();
       const enrolled = await LocalAuthentication.isEnrolledAsync();
-      setHasBiometrics(compatible && enrolled);
+      const biometricsAvailable = compatible && enrolled;
+      setHasBiometrics(biometricsAvailable);
 
-      const storedPin = await secureGet(PIN_KEY);
+      const storedPin = await getPin();
       setHasPin(!!storedPin);
 
-      const failCount = parseInt((await secureGet(FAIL_COUNT_KEY)) ?? "0", 10);
-      const lockedUntilStr = await secureGet(LOCKED_UNTIL_KEY);
-      if (lockedUntilStr) {
-        const lockedUntilTs = parseInt(lockedUntilStr, 10);
-        if (lockedUntilTs > Date.now()) {
-          setLockedUntil(lockedUntilTs);
-          setFailedAttempts(failCount);
-        } else {
-          await secureDelete(LOCKED_UNTIL_KEY);
-          await secureDelete(FAIL_COUNT_KEY);
+      try {
+        const failCount = parseInt(
+          (await secureGet(FAIL_COUNT_KEY)) ?? "0",
+          10
+        );
+        const lockedUntilStr = await secureGet(LOCKED_UNTIL_KEY);
+        if (lockedUntilStr) {
+          const lockedUntilTs = parseInt(lockedUntilStr, 10);
+          if (lockedUntilTs > Date.now()) {
+            setLockedUntil(lockedUntilTs);
+            setFailedAttempts(failCount);
+          } else {
+            await secureDelete(LOCKED_UNTIL_KEY);
+            await secureDelete(FAIL_COUNT_KEY);
+          }
         }
-      }
+      } catch {}
 
-      if (!compatible || !enrolled) {
-        setIsAuthenticated(true);
+      if (!biometricsAvailable) {
+        if (!storedPin) {
+          setIsAuthenticated(true);
+        }
+        setIsLoading(false);
         return;
       }
-      await attemptBiometric();
-    })();
-  }, []);
+
+      const success = await attemptBiometric();
+      if (!success) {
+        setIsLocked(true);
+      }
+    } catch {
+      setIsAuthenticated(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -112,6 +154,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const attemptBiometric = async (): Promise<boolean> => {
     if (Platform.OS === "web") return true;
+    if (biometricInProgressRef.current) return false;
+    biometricInProgressRef.current = true;
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: "Verificá tu identidad para acceder",
@@ -127,6 +171,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       setIsAuthenticated(true);
       return true;
+    } finally {
+      biometricInProgressRef.current = false;
     }
   };
 
@@ -146,8 +192,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return attemptBiometric();
   }, []);
 
-  const setPin = useCallback(async (pin: string) => {
-    await secureSet(PIN_KEY, pin);
+  const setPinFn = useCallback(async (pin: string) => {
+    await savePin(pin);
     setHasPin(true);
   }, []);
 
@@ -156,34 +202,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return lockedUntil > Date.now();
   };
 
-  const verifyPin = useCallback(async (pin: string): Promise<boolean> => {
-    if (isCurrentlyLocked()) return false;
+  const verifyPin = useCallback(
+    async (input: string): Promise<boolean> => {
+      if (isCurrentlyLocked()) return false;
 
-    const stored = await secureGet(PIN_KEY);
-    const ok = stored === pin;
+      try {
+        const ok = await validatePin(input);
 
-    if (ok) {
-      await secureDelete(FAIL_COUNT_KEY);
-      await secureDelete(LOCKED_UNTIL_KEY);
-      setFailedAttempts(0);
-      setLockedUntil(null);
-      await showSuccessAndUnlock();
-      return true;
-    } else {
-      const newCount = failedAttempts + 1;
-      setFailedAttempts(newCount);
-      await secureSet(FAIL_COUNT_KEY, String(newCount));
+        if (ok) {
+          await secureDelete(FAIL_COUNT_KEY);
+          await secureDelete(LOCKED_UNTIL_KEY);
+          setFailedAttempts(0);
+          setLockedUntil(null);
+          await showSuccessAndUnlock();
+          return true;
+        } else {
+          const newCount = failedAttempts + 1;
+          setFailedAttempts(newCount);
+          await secureSet(FAIL_COUNT_KEY, String(newCount));
 
-      if (newCount >= MAX_FAILS) {
-        const until = Date.now() + LOCKOUT_DURATION_MS;
-        setLockedUntil(until);
-        await secureSet(LOCKED_UNTIL_KEY, String(until));
-        setFailedAttempts(0);
-        await secureDelete(FAIL_COUNT_KEY);
+          if (newCount >= MAX_FAILS) {
+            const until = Date.now() + LOCKOUT_DURATION_MS;
+            setLockedUntil(until);
+            await secureSet(LOCKED_UNTIL_KEY, String(until));
+            setFailedAttempts(0);
+            await secureDelete(FAIL_COUNT_KEY);
+          }
+          return false;
+        }
+      } catch {
+        return false;
       }
-      return false;
-    }
-  }, [failedAttempts, lockedUntil]);
+    },
+    [failedAttempts, lockedUntil]
+  );
 
   const lock = useCallback(() => {
     setIsAuthenticated(false);
@@ -194,6 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
+        isLoading,
         isLocked,
         isAuthenticated,
         hasBiometrics,
@@ -201,7 +254,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         failedAttempts,
         lockedUntil,
         unlock,
-        setPin,
+        setPin: setPinFn,
         verifyPin,
         lock,
         successState,

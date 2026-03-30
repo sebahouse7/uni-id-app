@@ -53,7 +53,6 @@ export function LockScreen() {
 
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-    if (mode === "bio") unlock();
   }, []);
 
   useEffect(() => {
