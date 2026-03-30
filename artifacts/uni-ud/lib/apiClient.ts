@@ -3,7 +3,7 @@ import { Platform } from "react-native";
 
 const BASE_URL =
   process.env["EXPO_PUBLIC_API_URL"] ||
-  "http://192.168.1.36:8080/api";
+  "https://2b3f24cc-d863-4c5f-b402-4c62471fd42f-00-21k5g1p7ujf67.picard.replit.dev/api";
 
 const KEYS = {
   ACCESS: "uni_access_token",
