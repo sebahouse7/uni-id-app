@@ -5,6 +5,9 @@ const BASE_URL =
   process.env["EXPO_PUBLIC_API_URL"] ||
   "https://2b3f24cc-d863-4c5f-b402-4c62471fd42f-00-21k5g1p7ujf67.picard.replit.dev/api";
 
+// Nota: EXPO_PUBLIC_API_URL siempre se define en el script dev de package.json
+// con la URL correcta del dominio Replit SIN puerto (puerto 443 implícito)
+
 const KEYS = {
   ACCESS: "uni_access_token",
   REFRESH: "uni_refresh_token",
