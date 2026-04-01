@@ -17,13 +17,15 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSFaceIDUsageDescription": "uni.id usa Face ID para proteger tu identidad digital."
-      }
+      },
+      "bundleIdentifier": "com.humanidhubs.uniid"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#060B18"
-      }
+      },
+      "package": "com.humanidhubs.uniid"
     },
     "web": {
       "favicon": "./assets/images/icon.png",
@@ -43,6 +45,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "64ec4192-2d40-4c2e-a23f-ff204d26f048"
+      }
+    },
+    "owner": "uniid"
   }
 }
