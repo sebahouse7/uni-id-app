@@ -317,8 +317,7 @@ export async function apiShareView(token: string): Promise<{
   accessCount: number;
   allowFileView: boolean;
 }> {
-  const base = process.env["EXPO_PUBLIC_API_URL"] ?? "/api";
-  const res = await fetchWithRetry(`${base}/share/${token}`, {});
+  const res = await fetchWithRetry(`${BASE_URL}/share/${token}`, {});
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? "Enlace inválido o expirado");

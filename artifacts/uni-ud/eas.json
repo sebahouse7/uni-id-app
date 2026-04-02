@@ -20,10 +20,22 @@
         "simulator": true
       }
     },
+    "production-apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://expressjs-production-8bfc.up.railway.app/api"
+      }
+    },
     "production": {
       "distribution": "store",
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://expressjs-production-8bfc.up.railway.app/api"
       }
     }
   },
