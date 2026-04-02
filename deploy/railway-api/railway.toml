@@ -8,6 +8,3 @@ healthcheckPath = "/api/healthz"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
-
-[deploy.environmentVariables]
-NODE_ENV = "production"
