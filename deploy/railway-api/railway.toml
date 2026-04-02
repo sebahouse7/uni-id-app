@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm install --omit=dev"
+
+[deploy]
+startCommand = "node migrate.mjs && node dist/index.mjs"
+healthcheckPath = "/api/healthz"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[deploy.environmentVariables]
+NODE_ENV = "production"

@@ -1,0 +1,16 @@
+{
+  "name": "uni-id-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node migrate.mjs && node dist/index.mjs",
+    "start:no-migrate": "node dist/index.mjs"
+  },
+  "dependencies": {
+    "nodemailer": "^8.0.4",
+    "pg": "^8.20.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

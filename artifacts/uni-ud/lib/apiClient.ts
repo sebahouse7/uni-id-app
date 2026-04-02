@@ -111,7 +111,7 @@ export async function apiCheckHealth(): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(`${BASE_URL}/health`, { signal: controller.signal });
+    const res = await fetch(`${BASE_URL}/healthz`, { signal: controller.signal });
     clearTimeout(timer);
     return res.ok;
   } catch {
