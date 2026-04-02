@@ -16,7 +16,10 @@
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
-        "NSFaceIDUsageDescription": "uni.id usa Face ID para proteger tu identidad digital."
+        "NSFaceIDUsageDescription": "uni.id usa Face ID para proteger tu identidad digital.",
+        "NSCameraUsageDescription": "uni.id usa la cámara para fotografiar tus documentos.",
+        "NSPhotoLibraryUsageDescription": "uni.id accede a tu galería para adjuntar imágenes a tus documentos.",
+        "NSPhotoLibraryAddUsageDescription": "uni.id guarda fotos de tus documentos en tu galería."
       },
       "bundleIdentifier": "com.humanidhubs.uniid"
     },
@@ -25,7 +28,13 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#060B18"
       },
-      "package": "com.humanidhubs.uniid"
+      "package": "com.humanidhubs.uniid",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png",
@@ -40,7 +49,14 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "uni.id accede a tu galería para adjuntar imágenes a documentos.",
+          "cameraPermission": "uni.id usa la cámara para fotografiar tus documentos."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

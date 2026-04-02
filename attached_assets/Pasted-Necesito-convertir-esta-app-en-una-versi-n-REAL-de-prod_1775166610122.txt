@@ -1,0 +1,148 @@
+Necesito convertir esta app en una versión REAL de producción (APK instalable) con backend estable en Railway.
+
+Backend ya activo:
+https://expressjs-production-8bfc.up.railway.app
+
+--------------------------------------------------
+
+PROBLEMA ACTUAL:
+
+- La app funciona, pero cuando entra en reposo deja de conectar.
+- Antes dependía de Replit (sleep), ahora debe depender SOLO de Railway.
+- Necesito que funcione SIEMPRE al abrirla.
+
+--------------------------------------------------
+
+1) BACKEND / CONFIGURACIÓN
+
+- Reemplazar TODAS las URLs por:
+
+BASE_URL = "https://expressjs-production-8bfc.up.railway.app"
+
+- Eliminar cualquier dependencia de Replit (wake server, urls internas, etc)
+
+- Asegurar que todas las requests apunten a Railway
+
+--------------------------------------------------
+
+2) SISTEMA DE RED (CRÍTICO)
+
+Implementar sistema robusto:
+
+- Retry automático de requests (mínimo 3 intentos)
+- Timeout de requests (5 a 10 segundos)
+- Manejo de errores de red
+- No dejar la app en estado muerto
+
+Crear función global tipo:
+
+fetchWithRetry()
+
+--------------------------------------------------
+
+3) RECONEXIÓN AUTOMÁTICA
+
+- Detectar cuando la app vuelve del background (AppState)
+
+Cuando vuelve a "active":
+
+- Reintentar conexión automáticamente
+- Refrescar datos
+- Revalidar sesión si existe
+
+--------------------------------------------------
+
+4) CHECK DE BACKEND
+
+- Crear endpoint en backend:
+
+GET /health
+
+- Desde la app:
+
+- Verificar conexión antes de acciones importantes
+- Mostrar estado si backend no responde
+
+--------------------------------------------------
+
+5) EXPERIENCIA DE USUARIO
+
+- Mostrar loader mientras reconecta
+- Mostrar mensaje si no hay conexión
+- Evitar errores tipo “Error al registrar”
+
+--------------------------------------------------
+
+6) UI / UX
+
+- Mejorar pantalla principal estilo dashboard (como referencia visual enviada)
+- Mantener todas las funcionalidades actuales
+- Agregar foto de perfil visible
+- Reordenar navegación inferior (Perfil primero)
+
+--------------------------------------------------
+
+7) DOCUMENTOS
+
+- Al agregar documento:
+  - Abrir cámara directamente
+  - Opción cámara o galería
+
+- Implementar QR:
+  - Generar QR para compartir documentos
+  - Escanear QR para recibir documentos
+
+--------------------------------------------------
+
+8) PLANES Y PAGOS
+
+- Corregir lógica de planes:
+
+  - Básico (limitado)
+  - Premium (pago real)
+
+- Integrar MercadoPago:
+
+  - Flujo de pago real
+  - Diferenciar usuario básico vs premium
+
+- Corregir error:
+  - No debe decir “ya estás en plan pro” sin pagar
+
+--------------------------------------------------
+
+9) IDIOMAS
+
+- Implementar sistema i18n REAL
+- Traducir toda la app (no solo selector)
+
+--------------------------------------------------
+
+10) PRODUCCIÓN APK
+
+IMPORTANTE:
+
+- Generar APK real de producción (NO Expo Go)
+- Usar Expo EAS Build o equivalente
+- APK instalable directo
+
+- Configurar:
+
+  - modo producción
+  - conexión a Railway
+  - sin dependencias de desarrollo
+
+--------------------------------------------------
+
+OBJETIVO FINAL:
+
+- App funcionando 24/7
+- Backend en Railway estable
+- APK instalable real
+- La app debe funcionar aunque haya estado en reposo
+
+NO simplificar funcionalidades existentes
+NO eliminar categorías
+Mejorar sin romper lo actual
+
+--------------------------------------------------

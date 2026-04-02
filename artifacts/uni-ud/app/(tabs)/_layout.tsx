@@ -20,6 +20,10 @@ function NativeTabLayout() {
   const { t } = useLanguage();
   return (
     <NativeTabs>
+      <NativeTabs.Trigger name="profile">
+        <Icon sf={{ default: "person", selected: "person.fill" }} />
+        <Label>{t.tabProfile}</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>{t.tabHome}</Label>
@@ -27,10 +31,6 @@ function NativeTabLayout() {
       <NativeTabs.Trigger name="documents">
         <Icon sf={{ default: "doc.text", selected: "doc.text.fill" }} />
         <Label>{t.tabDocs}</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="security">
-        <Icon sf={{ default: "shield", selected: "shield.fill" }} />
-        <Label>{t.tabSecurity}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="network">
         <Icon sf={{ default: "network", selected: "network" }} />
@@ -40,9 +40,9 @@ function NativeTabLayout() {
         <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
         <Label>{t.tabBusiness}</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>{t.tabProfile}</Label>
+      <NativeTabs.Trigger name="security">
+        <Icon sf={{ default: "shield", selected: "shield.fill" }} />
+        <Label>{t.tabSecurity}</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -133,16 +133,24 @@ function ClassicTabLayout() {
       }}
     >
       <Tabs.Screen
+        name="profile"
+        options={{
+          title: t.tabProfile,
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView name={focused ? "person.fill" : "person"} tintColor={color} size={23} />
+            ) : (
+              <TabIcon name="user" color={color} focused={focused} />
+            ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: t.tabHome,
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView
-                name={focused ? "house.fill" : "house"}
-                tintColor={color}
-                size={23}
-              />
+              <SymbolView name={focused ? "house.fill" : "house"} tintColor={color} size={23} />
             ) : (
               <TabIcon name="home" color={color} focused={focused} />
             ),
@@ -154,29 +162,9 @@ function ClassicTabLayout() {
           title: t.tabDocs,
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView
-                name={focused ? "doc.text.fill" : "doc.text"}
-                tintColor={color}
-                size={23}
-              />
+              <SymbolView name={focused ? "doc.text.fill" : "doc.text"} tintColor={color} size={23} />
             ) : (
               <TabIcon name="file-text" color={color} focused={focused} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="security"
-        options={{
-          title: t.tabSecurity,
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView
-                name={focused ? "shield.fill" : "shield"}
-                tintColor={color}
-                size={23}
-              />
-            ) : (
-              <TabIcon name="shield" color={color} focused={focused} />
             ),
         }}
       />
@@ -186,11 +174,7 @@ function ClassicTabLayout() {
           title: t.tabNetwork,
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView
-                name="network"
-                tintColor={color}
-                size={23}
-              />
+              <SymbolView name="network" tintColor={color} size={23} />
             ) : (
               <TabIcon name="share-2" color={color} focused={focused} />
             ),
@@ -202,29 +186,21 @@ function ClassicTabLayout() {
           title: t.tabBusiness,
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView
-                name={focused ? "briefcase.fill" : "briefcase"}
-                tintColor={color}
-                size={23}
-              />
+              <SymbolView name={focused ? "briefcase.fill" : "briefcase"} tintColor={color} size={23} />
             ) : (
               <TabIcon name="briefcase" color={color} focused={focused} />
             ),
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="security"
         options={{
-          title: t.tabProfile,
+          title: t.tabSecurity,
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView
-                name={focused ? "person.fill" : "person"}
-                tintColor={color}
-                size={23}
-              />
+              <SymbolView name={focused ? "shield.fill" : "shield"} tintColor={color} size={23} />
             ) : (
-              <TabIcon name="user" color={color} focused={focused} />
+              <TabIcon name="shield" color={color} focused={focused} />
             ),
         }}
       />

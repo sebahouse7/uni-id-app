@@ -15,10 +15,12 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LockScreen } from "@/components/LockScreen";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { SplashScreenCustom } from "@/components/SplashScreenCustom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { IdentityProvider } from "@/context/IdentityContext";
 import { LanguageProvider } from "@/context/LanguageContext";
+import { NetworkProvider } from "@/context/NetworkContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -76,18 +78,21 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <LanguageProvider>
-            <AuthProvider>
-              <IdentityProvider>
-                <GestureHandlerRootView style={{ flex: 1 }}>
-                  <KeyboardProvider>
-                    <RootLayoutNav />
-                    {appReady && showSplash && (
-                      <SplashScreenCustom onFinish={handleSplashFinish} />
-                    )}
-                  </KeyboardProvider>
-                </GestureHandlerRootView>
-              </IdentityProvider>
-            </AuthProvider>
+            <NetworkProvider>
+              <AuthProvider>
+                <IdentityProvider>
+                  <GestureHandlerRootView style={{ flex: 1 }}>
+                    <KeyboardProvider>
+                      <RootLayoutNav />
+                      <OfflineBanner />
+                      {appReady && showSplash && (
+                        <SplashScreenCustom onFinish={handleSplashFinish} />
+                      )}
+                    </KeyboardProvider>
+                  </GestureHandlerRootView>
+                </IdentityProvider>
+              </AuthProvider>
+            </NetworkProvider>
           </LanguageProvider>
         </QueryClientProvider>
       </ErrorBoundary>

@@ -1,12 +1,10 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
-const BASE_URL =
-  process.env["EXPO_PUBLIC_API_URL"] ||
-  "https://2b3f24cc-d863-4c5f-b402-4c62471fd42f-00-21k5g1p7ujf67.picard.replit.dev/api";
+const RAILWAY_URL = "https://expressjs-production-8bfc.up.railway.app/api";
+const BASE_URL = process.env["EXPO_PUBLIC_API_URL"] || RAILWAY_URL;
 
-// Nota: EXPO_PUBLIC_API_URL siempre se define en el script dev de package.json
-// con la URL correcta del dominio Replit SIN puerto (puerto 443 implícito)
+const REQUEST_TIMEOUT_MS = 8000;
 
 const KEYS = {
   ACCESS: "uni_access_token",
@@ -82,7 +80,7 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-// ─── Retry fetch with exponential backoff (network errors only) ───────────────
+// ─── Retry fetch with timeout + exponential backoff ──────────────────────────
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
@@ -90,18 +88,35 @@ async function fetchWithRetry(
 ): Promise<Response> {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const res = await fetch(url, options);
-      // Only retry on network-level errors (fetch throws), not HTTP errors
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
       return res;
     } catch (err: any) {
-      lastError = err;
+      clearTimeout(timer);
+      lastError = err?.name === "AbortError"
+        ? new Error("Tiempo de espera agotado. Verificá tu conexión.")
+        : err;
       if (attempt < maxRetries - 1) {
         await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 800));
       }
     }
   }
-  throw lastError ?? new Error("Error de conexión");
+  throw lastError ?? new Error("Sin conexión al servidor");
+}
+
+export async function apiCheckHealth(): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`${BASE_URL}/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 // ─── Authenticated fetch ──────────────────────────────────────────────────────

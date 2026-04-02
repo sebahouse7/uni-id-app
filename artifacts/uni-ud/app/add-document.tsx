@@ -1,9 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActionSheetIOS,
   Alert,
   Platform,
   Pressable,
@@ -33,6 +35,54 @@ export default function AddDocumentScreen() {
   const [fileUri, setFileUri] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
 
+  const handleCamera = async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permiso requerido", "Necesitamos acceso a la cámara para tomar fotos.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        allowsEditing: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const name = `foto_${Date.now()}.jpg`;
+        setFileName(name);
+        setFileUri(asset.uri);
+        if (!title) setTitle(`Foto ${new Date().toLocaleDateString()}`);
+      }
+    } catch {
+      Alert.alert("Error", "No se pudo acceder a la cámara.");
+    }
+  };
+
+  const handleGallery = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permiso requerido", "Necesitamos acceso a tu galería.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        allowsEditing: false,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const name = asset.fileName ?? `imagen_${Date.now()}.jpg`;
+        setFileName(name);
+        setFileUri(asset.uri);
+        if (!title) setTitle(name.replace(/\.[^/.]+$/, ""));
+      }
+    } catch {
+      Alert.alert("Error", "No se pudo abrir la galería.");
+    }
+  };
+
   const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -46,6 +96,29 @@ export default function AddDocumentScreen() {
       }
     } catch {
       Alert.alert("Error", "No se pudo seleccionar el archivo.");
+    }
+  };
+
+  const handleAttach = () => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Cancelar", "Tomar foto", "Elegir de galería", "Seleccionar archivo"],
+          cancelButtonIndex: 0,
+        },
+        (index) => {
+          if (index === 1) handleCamera();
+          else if (index === 2) handleGallery();
+          else if (index === 3) handlePickFile();
+        }
+      );
+    } else {
+      Alert.alert("Agregar archivo", "¿De dónde querés adjuntar?", [
+        { text: "Cancelar", style: "cancel" },
+        { text: "📷 Tomar foto", onPress: handleCamera },
+        { text: "🖼 Galería", onPress: handleGallery },
+        { text: "📄 Archivo", onPress: handlePickFile },
+      ]);
     }
   };
 
@@ -189,7 +262,7 @@ export default function AddDocumentScreen() {
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>Archivo adjunto (opcional)</Text>
           <Pressable
-            onPress={handlePickFile}
+            onPress={handleAttach}
             style={({ pressed }) => [
               styles.filePicker,
               {
