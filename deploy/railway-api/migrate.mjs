@@ -14,8 +14,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
-  console.error("❌ DATABASE_URL is not set. Cannot run migrations.");
-  process.exit(1);
+  console.warn("⚠️  DATABASE_URL not set — skipping migration. Server will start but DB endpoints will fail.");
+  process.exit(0);
 }
 
 const pool = new Pool({
@@ -25,18 +25,20 @@ const pool = new Pool({
 });
 
 async function migrate() {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     console.log("🔄 Running schema migration...");
     const sql = readFileSync(path.join(__dirname, "schema.sql"), "utf-8");
     await client.query(sql);
     console.log("✅ Schema migration complete.");
   } catch (err) {
     console.error("❌ Migration failed:", err.message);
-    process.exit(1);
+    console.warn("⚠️  Server will start but DB may be in inconsistent state.");
+    // Don't exit(1) — let the server start anyway
   } finally {
-    client.release();
-    await pool.end();
+    if (client) client.release();
+    await pool.end().catch(() => {});
   }
 }
 
