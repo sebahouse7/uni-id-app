@@ -11,7 +11,6 @@ import { AppState, Platform } from "react-native";
 
 import { secureDelete, secureGet, secureSet } from "./SecureStorage";
 import {
-  clearPin,
   getPin,
   migrateOldPinKeys,
   savePin,
@@ -67,9 +66,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const lastActiveRef = useRef(Date.now());
   const appStateRef = useRef(AppState.currentState);
   const biometricInProgressRef = useRef(false);
+  const initDoneRef = useRef(false);
 
   useEffect(() => {
-    initAuth();
+    if (!initDoneRef.current) {
+      initDoneRef.current = true;
+      initAuth();
+    }
   }, []);
 
   async function initAuth() {
@@ -108,18 +111,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch {}
 
-      if (!biometricsAvailable) {
-        if (!storedPin) {
-          setIsAuthenticated(true);
+      if (biometricsAvailable) {
+        const success = await attemptBiometric();
+        if (!success) {
+          setIsLocked(true);
         }
-        setIsLoading(false);
         return;
       }
 
-      const success = await attemptBiometric();
-      if (!success) {
+      if (storedPin) {
         setIsLocked(true);
+        return;
       }
+
+      setIsLocked(true);
     } catch {
       setIsAuthenticated(true);
     } finally {
@@ -158,10 +163,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     biometricInProgressRef.current = true;
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Verificá tu identidad para acceder",
+        promptMessage: "Verificá tu identidad para acceder a uni.id",
         fallbackLabel: "Usar PIN",
         cancelLabel: "Cancelar",
-        disableDeviceFallback: false,
+        disableDeviceFallback: true,
       });
       if (result.success) {
         await showSuccessAndUnlock();
@@ -169,8 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return false;
     } catch {
-      setIsAuthenticated(true);
-      return true;
+      return false;
     } finally {
       biometricInProgressRef.current = false;
     }

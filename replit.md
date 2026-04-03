@@ -13,14 +13,38 @@ Mobile identity wallet app built with Expo React Native.
 - **Dark mode**: Automatic (follows system) with dedicated color tokens in `constants/colors.ts`
 
 ### Screens Redesigned
-- `app/(tabs)/index.tsx` — Dashboard: gradient hero card, animated mount, 2-col category grid
+- `app/(tabs)/index.tsx` — Dashboard: gradient hero card, animated mount, 2-col category grid, shows 6 recent docs
 - `app/(tabs)/documents.tsx` — Premium search bar, chip filters with counts, share button
 - `app/(tabs)/profile.tsx` — Gradient hero section, plan badges, category breakdown
 - `app/(tabs)/network.tsx` — Gradient plan cards, MercadoPago/Stripe working checkout
-- `app/(tabs)/security.tsx` — Live viz with LinearGradient, animated threat bar, activity feed
+- `app/(tabs)/security.tsx` — Live viz, trust score card, credentials count, animated threat bar
 - `app/(tabs)/_layout.tsx` — Cleaner tab bar with iOS SF Symbols / Feather icons
 - `app/onboarding.tsx` — Gradient slide icons, animated scale transitions, trust badge
-- `components/LockScreen.tsx` — Gradient logo icon, premium keypad UI
+- `components/LockScreen.tsx` — Gradient logo icon, premium keypad UI, auto-trigger bio on mount
+
+### Security (FASE 1 — Complete)
+- **PIN hashing**: SHA-256 via expo-crypto, salt: `uni.id::secure::pin::v1::2024` — stored as hash, never plaintext
+- **Biometric**: `disableDeviceFallback: true` on Android (only real fingerprint/face, no device PIN as fallback)
+- **Double execution guard**: `biometricInProgressRef` + `initDoneRef` prevent double bio prompts
+- **LockScreen fallback**: bio→PIN/setpin depending on whether PIN exists; auto-triggers bio on mount
+- **PIN key**: `uni_id_pin_v1` (never changed)
+
+### Documents (FASE 2 — Complete)
+- **Loading infinito fixed**: `handleSave` in `add-document.tsx` wrapped in try/catch/finally
+- **Error messages**: Alert shown on success (`✅ Guardado`) and failure with server message
+- **Offline fallback**: Documents saved locally if offline, synced on next connection
+
+### Digital Identity (FASE 6 — Complete)
+- `context/IdentityContext.tsx` exposes `digitalIdentity: DigitalIdentity` with:
+  - `userId`, `deviceId`, `credentials[]`, `trustScore` (30+5/doc+20/40 for plan), `connectedNodes`
+- Trust score visible in Security tab with credential count and node count
+- `VerifiableCredential` interface for future verifiable identity expansion
+
+### Railway Backend Notes
+- **IMPORTANT**: `MP_ACCESS_TOKEN` must be set manually in Railway dashboard → API service → Variables
+  (Replit RAILWAY_TOKEN expired/unauthorized for API operations)
+- Railway URL: `https://expressjs-production-8bfc.up.railway.app/api`
+- All 10 tables confirmed in Railway PostgreSQL
 
 ### QR Share system
 - Backend: `routes/share.ts` — POST /share/create, GET /share/:token (public), DELETE /share/:token (revoke), GET /share/history

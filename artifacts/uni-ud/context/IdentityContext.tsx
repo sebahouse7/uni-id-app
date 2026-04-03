@@ -50,6 +50,27 @@ export interface IdentityNode {
   networkPlan?: "free" | "basic" | "pro";
 }
 
+export interface VerifiableCredential {
+  id: string;
+  type: "identity" | "document" | "signature";
+  issuer: "self" | "network" | "institution";
+  subject: string;
+  issuedAt: string;
+  expiresAt?: string;
+  status: "active" | "revoked" | "pending";
+  proof?: string;
+}
+
+export interface DigitalIdentity {
+  userId: string;
+  deviceId: string;
+  publicKey?: string;
+  credentials: VerifiableCredential[];
+  trustScore: number;
+  connectedNodes: number;
+  lastVerified: string;
+}
+
 export interface CognitiveNetwork {
   id: string;
   name: string;
@@ -95,6 +116,7 @@ interface IdentityContextType {
   isLoading: boolean;
   isSyncing: boolean;
   isOnline: boolean;
+  digitalIdentity: DigitalIdentity | null;
   createNode: (data: Omit<IdentityNode, "id" | "createdAt">) => Promise<void>;
   updateNode: (data: Partial<IdentityNode>) => Promise<void>;
   addDocument: (doc: Omit<Document, "id" | "createdAt" | "updatedAt">) => Promise<void>;
@@ -112,18 +134,54 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
   const syncRef = useRef(false);
+
+  const digitalIdentity: DigitalIdentity | null = node
+    ? {
+        userId: node.id,
+        deviceId: deviceId ?? "pending",
+        credentials: [
+          {
+            id: `cred-identity-${node.id}`,
+            type: "identity",
+            issuer: "self",
+            subject: node.name,
+            issuedAt: node.createdAt,
+            status: "active",
+          },
+          ...documents.map((d) => ({
+            id: `cred-doc-${d.id}`,
+            type: "document" as const,
+            issuer: "self" as const,
+            subject: d.title,
+            issuedAt: d.createdAt,
+            status: "active" as const,
+          })),
+        ],
+        trustScore: Math.min(
+          100,
+          30 +
+            (documents.length > 0 ? Math.min(30, documents.length * 5) : 0) +
+            (node.networkPlan === "basic" ? 20 : node.networkPlan === "pro" ? 40 : 0)
+        ),
+        connectedNodes: node.networkPlan !== "free" ? 147382 : 0,
+        lastVerified: new Date().toISOString(),
+      }
+    : null;
 
   // Load from local cache first (instant load), then sync backend
   useEffect(() => {
     (async () => {
       try {
-        const [rawNode, rawDocs] = await Promise.all([
+        const [rawNode, rawDocs, dId] = await Promise.all([
           secureGet(CACHE_KEY_NODE).catch(() => null),
           secureGet(CACHE_KEY_DOCS).catch(() => null),
+          getOrCreateDeviceId().catch(() => null),
         ]);
         if (rawNode) setNode(JSON.parse(rawNode));
         if (rawDocs) setDocuments(JSON.parse(rawDocs));
+        if (dId) setDeviceId(dId);
       } catch {
         // ignore cache errors
       } finally {
@@ -243,7 +301,6 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
       };
       await cacheDocs([newDoc, ...documents]);
     } else {
-      // Offline fallback — will sync on next connection
       const tempDoc: Document = {
         id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         createdAt: new Date().toISOString(),
@@ -284,6 +341,7 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isSyncing,
         isOnline,
+        digitalIdentity,
         createNode,
         updateNode,
         addDocument,

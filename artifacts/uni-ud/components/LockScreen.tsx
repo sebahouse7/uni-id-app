@@ -45,6 +45,14 @@ export function LockScreen() {
   const [step, setStep] = useState<"enter" | "confirm">("enter");
   const [error, setError] = useState("");
   const [isLocked, setIsLocked] = useState(lockedUntil != null && lockedUntil > Date.now());
+  const bioAutoTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (mode === "bio" && !bioAutoTriggeredRef.current && !isLocked) {
+      bioAutoTriggeredRef.current = true;
+      unlock();
+    }
+  }, [mode]);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;
@@ -199,13 +207,14 @@ export function LockScreen() {
             </LinearGradient>
           </Pressable>
 
-          {hasBiometrics && (
-            <Pressable onPress={() => setMode("pin")} style={styles.altBtn}>
-              <Text style={[styles.altBtnText, { color: colors.tint }]}>
-                Usar PIN en su lugar
-              </Text>
-            </Pressable>
-          )}
+          <Pressable
+            onPress={() => setMode(hasPin ? "pin" : "setpin")}
+            style={styles.altBtn}
+          >
+            <Text style={[styles.altBtnText, { color: colors.tint }]}>
+              {hasPin ? "Usar PIN en su lugar" : "Crear PIN de respaldo"}
+            </Text>
+          </Pressable>
         </View>
       )}
 

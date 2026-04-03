@@ -66,9 +66,14 @@ export default function ProfileScreen() {
 
   const handleSave = async () => {
     setSaving(true);
-    await updateNode({ name, bio });
-    setSaving(false);
-    setEditing(false);
+    try {
+      await updateNode({ name, bio });
+      setEditing(false);
+    } catch (err: any) {
+      Alert.alert("Error", err?.message ?? "No se pudo actualizar el perfil.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const docsByCat = CATEGORIES.map((cat) => ({

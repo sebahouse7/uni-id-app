@@ -1,6 +1,8 @@
+import * as Crypto from "expo-crypto";
 import { secureDelete, secureGet, secureSet } from "@/context/SecureStorage";
 
 export const PIN_KEY = "uni_id_pin_v1";
+const PIN_HASH_SALT = "uni.id::secure::pin::v1::2024";
 
 const LEGACY_KEYS = [
   "pin",
@@ -9,6 +11,14 @@ const LEGACY_KEYS = [
   "@uni_pin",
   "@uni_id_pin",
 ];
+
+async function hashPin(pin: string): Promise<string> {
+  return Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    `${PIN_HASH_SALT}:${pin}`,
+    { encoding: Crypto.CryptoEncoding.HEX }
+  );
+}
 
 export async function migrateOldPinKeys(): Promise<void> {
   for (const key of LEGACY_KEYS) {
@@ -19,7 +29,8 @@ export async function migrateOldPinKeys(): Promise<void> {
 }
 
 export async function savePin(pin: string): Promise<void> {
-  await secureSet(PIN_KEY, pin);
+  const hashed = await hashPin(pin);
+  await secureSet(PIN_KEY, hashed);
 }
 
 export async function getPin(): Promise<string | null> {
@@ -33,7 +44,9 @@ export async function getPin(): Promise<string | null> {
 export async function validatePin(input: string): Promise<boolean> {
   try {
     const stored = await getPin();
-    return stored !== null && stored === input;
+    if (!stored) return false;
+    const hashed = await hashPin(input);
+    return stored === hashed;
   } catch {
     return false;
   }

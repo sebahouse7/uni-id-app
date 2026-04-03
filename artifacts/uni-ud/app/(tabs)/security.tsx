@@ -148,12 +148,14 @@ export default function SecurityScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { documents } = useIdentity();
+  const { documents, digitalIdentity } = useIdentity();
   const [threatLevel] = useState(12);
   const [auditEvents, setAuditEvents] = useState<SecurityEvent[]>([]);
 
   const nodeCount = 147382;
   const protectedCount = 8241;
+  const trustScore = digitalIdentity?.trustScore ?? 30;
+  const credentialsCount = digitalIdentity?.credentials.length ?? 0;
 
   useEffect(() => {
     apiGetAuditLogs(20).then((logs) => {
@@ -270,6 +272,53 @@ export default function SecurityScreen() {
           <Text style={[styles.cardNote, { color: colors.textSecondary }]}>
             La red aprendió y bloqueó 23 nuevos patrones en las últimas 24 hs.
           </Text>
+        </View>
+      </View>
+
+      {/* Trust Score — FASE 6 */}
+      <View style={{ paddingHorizontal: Spacing.md }}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.backgroundCard, borderColor: colors.border },
+            Shadows.sm,
+          ]}
+        >
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIconWrap, { backgroundColor: "#7C3AED18" }]}>
+              <Feather name="star" size={16} color="#7C3AED" />
+            </View>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>
+              Identidad digital — Trust Score
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 8 }}>
+            <View style={{ flex: 1, gap: 8 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_400Regular" }}>
+                  {trustScore < 40 ? "Identidad básica" : trustScore < 70 ? "Identidad verificada" : "Identidad certificada"}
+                </Text>
+                <Text style={{ color: "#7C3AED", fontSize: 15, fontFamily: "Inter_700Bold" }}>{trustScore}%</Text>
+              </View>
+              <View style={{ height: 8, borderRadius: 4, overflow: "hidden", backgroundColor: colors.border }}>
+                <View style={{ height: "100%", borderRadius: 4, backgroundColor: "#7C3AED", width: `${trustScore}%` }} />
+              </View>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
+            <View style={{ flex: 1, backgroundColor: "#7C3AED10", borderRadius: 8, padding: 10, alignItems: "center" }}>
+              <Text style={{ color: "#7C3AED", fontSize: 18, fontFamily: "Inter_700Bold" }}>{credentialsCount}</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_400Regular" }}>Credenciales</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: "#1A6FE810", borderRadius: 8, padding: 10, alignItems: "center" }}>
+              <Text style={{ color: colors.tint, fontSize: 18, fontFamily: "Inter_700Bold" }}>{digitalIdentity?.connectedNodes?.toLocaleString("es-AR") ?? "0"}</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_400Regular" }}>Nodos</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: "#00D4FF10", borderRadius: 8, padding: 10, alignItems: "center" }}>
+              <Text style={{ color: "#00D4FF", fontSize: 18, fontFamily: "Inter_700Bold" }}>AES</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_400Regular" }}>Cifrado</Text>
+            </View>
+          </View>
         </View>
       </View>
 

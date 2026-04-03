@@ -114,7 +114,7 @@ export default function HomeScreen() {
   const totalDocs = documents.length;
   const recentDocs = [...documents]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 3);
+    .slice(0, 6);
 
   const catCounts = CATEGORIES.map((cat) => ({
     ...cat,
@@ -312,7 +312,12 @@ export default function HomeScreen() {
       {/* Recent documents */}
       <Animated.View style={recentAnim}>
         <View style={styles.sectionRow}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recientes</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Documentos recientes</Text>
+          {documents.length > 6 && (
+            <Pressable onPress={() => router.push("/(tabs)/documents")}>
+              <Text style={[styles.seeAll, { color: colors.tint }]}>Ver todos ({documents.length})</Text>
+            </Pressable>
+          )}
         </View>
 
         {recentDocs.length === 0 ? (

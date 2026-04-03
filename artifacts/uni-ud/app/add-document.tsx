@@ -131,9 +131,16 @@ export default function AddDocumentScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     setSaving(true);
-    await addDocument({ title: title.trim(), description, category, fileName, fileUri });
-    setSaving(false);
-    router.back();
+    try {
+      await addDocument({ title: title.trim(), description, category, fileName, fileUri });
+      Alert.alert("✅ Guardado", "El documento fue guardado correctamente.", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
+    } catch (err: any) {
+      Alert.alert("Error al guardar", err?.message ?? "No se pudo guardar el documento. Verificá tu conexión.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const selectedCat = CATEGORIES.find((c) => c.key === category);
