@@ -94,6 +94,21 @@ app.get("/api/dist-server/migrate.mjs", serveDeployFile("migrate.mjs", "applicat
 app.get("/api/dist-server/schema.sql", serveDeployFile("schema.sql", "text/plain"));
 app.get("/api/dist-server/package.json", serveDeployFile("package.json", "application/json"));
 
+// ─── APK download — public direct link ───────────────────────────────────────
+app.get("/api/download/uni-id.apk", (_req: Request, res: Response) => {
+  const apkPath = join("/home/runner/workspace/deploy", "uni-id.apk");
+  try {
+    const stat = statSync(apkPath);
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    res.setHeader("Content-Disposition", 'attachment; filename="uni-id.apk"');
+    res.setHeader("Content-Length", stat.size);
+    res.setHeader("Cache-Control", "no-cache");
+    createReadStream(apkPath).pipe(res);
+  } catch {
+    res.status(404).json({ error: "APK not available" });
+  }
+});
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use("/api", router);
 
