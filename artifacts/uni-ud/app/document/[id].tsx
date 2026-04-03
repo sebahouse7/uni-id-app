@@ -26,7 +26,7 @@ export default function DocumentDetailScreen() {
   const { documents, deleteDocument } = useIdentity();
   const [deleting, setDeleting] = useState(false);
 
-  const doc = documents.find((d) => d.id === id);
+  const doc = documents.find((d) => String(d.id) === String(id));
   const cat = doc ? CATEGORIES.find((c) => c.key === doc.category) : null;
 
   if (!doc) {

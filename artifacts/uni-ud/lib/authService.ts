@@ -57,3 +57,19 @@ export async function clearPin(): Promise<void> {
     await secureDelete(PIN_KEY);
   } catch {}
 }
+
+export async function checkPINSet(): Promise<boolean> {
+  const pin = await getPin();
+  return pin !== null;
+}
+
+export async function changePIN(oldPin: string, newPin: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const valid = await validatePin(oldPin);
+    if (!valid) return { success: false, error: "PIN actual incorrecto" };
+    await savePin(newPin);
+    return { success: true };
+  } catch {
+    return { success: false, error: "Error al cambiar el PIN" };
+  }
+}

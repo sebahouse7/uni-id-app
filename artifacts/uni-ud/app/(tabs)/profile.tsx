@@ -1,9 +1,12 @@
 import { Feather } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -21,6 +24,7 @@ import { Radii, Shadows, Spacing } from "@/constants/design";
 import { CATEGORIES, useIdentity } from "@/context/IdentityContext";
 import { LANGUAGES, useLanguage } from "@/context/LanguageContext";
 import { apiGetSessions, apiRevokeAllSessions } from "@/lib/apiClient";
+import { changePIN, checkPINSet } from "@/lib/authService";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -35,10 +39,61 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [sessions, setSessions] = useState<any[]>([]);
   const [revokingAll, setRevokingAll] = useState(false);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [showPINChange, setShowPINChange] = useState(false);
+  const [pinOld, setPinOld] = useState("");
+  const [pinNew, setPinNew] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [changingPIN, setChangingPIN] = useState(false);
 
   useEffect(() => {
     apiGetSessions().then(setSessions).catch(() => {});
   }, []);
+
+  const handlePickPhoto = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permiso requerido", "Necesitamos acceso a tu galería para elegir una foto.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setAvatarUri(result.assets[0].uri);
+      }
+    } catch {
+      Alert.alert("Error", "No se pudo acceder a la galería.");
+    }
+  };
+
+  const handleChangePIN = async () => {
+    if (pinNew.length < 4) {
+      Alert.alert("PIN muy corto", "El PIN debe tener al menos 4 dígitos.");
+      return;
+    }
+    if (pinNew !== pinConfirm) {
+      Alert.alert("PIN no coincide", "El nuevo PIN y la confirmación no son iguales.");
+      return;
+    }
+    setChangingPIN(true);
+    try {
+      const result = await changePIN(pinOld, pinNew);
+      if (result.success) {
+        Alert.alert("✓ PIN actualizado", "Tu PIN fue cambiado correctamente.");
+        setShowPINChange(false);
+        setPinOld(""); setPinNew(""); setPinConfirm("");
+      } else {
+        Alert.alert("Error", result.error ?? "No se pudo cambiar el PIN.");
+      }
+    } finally {
+      setChangingPIN(false);
+    }
+  };
 
   const handleRevokeAll = () => {
     Alert.alert(
@@ -122,6 +177,7 @@ export default function ProfileScreen() {
   ];
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentInsetAdjustmentBehavior="automatic"
@@ -170,15 +226,19 @@ export default function ProfileScreen() {
             Shadows.md,
           ]}
         >
-          {/* Avatar */}
-          <LinearGradient
-            colors={["#1A6FE8", "#0D8AEB"]}
-            style={styles.avatar}
-          >
-            <Text style={styles.avatarLetter}>
-              {(node?.name ?? "U")[0].toUpperCase()}
-            </Text>
-          </LinearGradient>
+          {/* Avatar — tappable to change photo */}
+          <Pressable onPress={handlePickPhoto} style={{ position: "relative" }}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={[styles.avatar, { borderRadius: 44 }]} />
+            ) : (
+              <LinearGradient colors={["#1A6FE8", "#0D8AEB"]} style={styles.avatar}>
+                <Text style={styles.avatarLetter}>{(node?.name ?? "U")[0].toUpperCase()}</Text>
+              </LinearGradient>
+            )}
+            <View style={styles.avatarEditBadge}>
+              <Feather name="camera" size={12} color="#fff" />
+            </View>
+          </Pressable>
 
           {editing ? (
             <TextInput
@@ -408,6 +468,24 @@ export default function ProfileScreen() {
         </View>
         <View style={[styles.separator, { backgroundColor: colors.border }]} />
         <Pressable
+          onPress={() => setShowPINChange(true)}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        >
+          <View style={[styles.infoRow, { gap: 14 }]}>
+            <View style={[styles.infoIcon, { backgroundColor: "#7C3AED15" }]}>
+              <Feather name="lock" size={15} color="#7C3AED" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>PIN de acceso</Text>
+              <Text style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.text }]}>
+                Cambiar contraseña / PIN
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={15} color={colors.textSecondary} />
+          </View>
+        </Pressable>
+        <View style={[styles.separator, { backgroundColor: colors.border }]} />
+        <Pressable
           onPress={handleRevokeAll}
           disabled={revokingAll}
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
@@ -470,8 +548,85 @@ export default function ProfileScreen() {
         </Text>
       </View>
     </ScrollView>
+
+    {/* PIN Change Modal */}
+    <Modal visible={showPINChange} transparent animationType="slide" onRequestClose={() => setShowPINChange(false)}>
+      <View style={pinStyles.overlay}>
+        <View style={[pinStyles.modal, { backgroundColor: isDark ? "#0D1525" : "#fff" }]}>
+          <View style={pinStyles.modalHeader}>
+            <Text style={[pinStyles.modalTitle, { color: colors.text }]}>Cambiar PIN</Text>
+            <Pressable onPress={() => setShowPINChange(false)} hitSlop={12}>
+              <Feather name="x" size={20} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          <Text style={[pinStyles.fieldLabel, { color: colors.textSecondary }]}>PIN actual</Text>
+          <TextInput
+            value={pinOld}
+            onChangeText={setPinOld}
+            secureTextEntry
+            keyboardType="numeric"
+            maxLength={8}
+            placeholder="••••"
+            placeholderTextColor={colors.textSecondary}
+            style={[pinStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+          />
+
+          <Text style={[pinStyles.fieldLabel, { color: colors.textSecondary }]}>Nuevo PIN</Text>
+          <TextInput
+            value={pinNew}
+            onChangeText={setPinNew}
+            secureTextEntry
+            keyboardType="numeric"
+            maxLength={8}
+            placeholder="Mínimo 4 dígitos"
+            placeholderTextColor={colors.textSecondary}
+            style={[pinStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+          />
+
+          <Text style={[pinStyles.fieldLabel, { color: colors.textSecondary }]}>Confirmar nuevo PIN</Text>
+          <TextInput
+            value={pinConfirm}
+            onChangeText={setPinConfirm}
+            secureTextEntry
+            keyboardType="numeric"
+            maxLength={8}
+            placeholder="Repetí el nuevo PIN"
+            placeholderTextColor={colors.textSecondary}
+            style={[pinStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+          />
+
+          <Pressable
+            onPress={handleChangePIN}
+            disabled={changingPIN}
+            style={[pinStyles.saveBtn, { backgroundColor: colors.tint, opacity: changingPIN ? 0.7 : 1 }]}
+          >
+            <Feather name="check" size={18} color="#fff" />
+            <Text style={pinStyles.saveBtnText}>{changingPIN ? "Guardando..." : "Guardar nuevo PIN"}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+    </View>
   );
 }
+
+const pinStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  modal: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 10 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  fieldLabel: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  input: {
+    borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
+    fontSize: 16, fontFamily: "Inter_500Medium", letterSpacing: 4,
+  },
+  saveBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 10, paddingVertical: 16, borderRadius: 14, marginTop: 8,
+  },
+  saveBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -509,6 +664,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
+  },
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#1A6FE8",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#060B18",
   },
   avatarLetter: { color: "#fff", fontSize: 36, fontFamily: "Inter_700Bold" },
   userName: { fontSize: 22, fontFamily: "Inter_700Bold" },

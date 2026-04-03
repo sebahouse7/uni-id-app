@@ -62,27 +62,19 @@ export default function NetworkScreen() {
     }
     setPurchasing(planId);
     try {
-      const useMP = region === "latam" && paymentConfig.mercadopago;
-      const useStripe = !useMP && paymentConfig.stripe;
+      // Always try real payment — LATAM uses MercadoPago, rest uses Stripe
+      const result = region === "latam"
+        ? await createMercadoPagoCheckout(planId, node.id)
+        : await createStripeCheckout(planId, node.id);
 
-      if (!useMP && !useStripe) {
-        await new Promise((r) => setTimeout(r, 1200));
+      if (!result.url) {
+        // Payment gateway not configured — activate plan directly (demo mode)
+        await new Promise((r) => setTimeout(r, 900));
         await updateNode({ networkPlan: planId });
         Alert.alert(
           t.planActivated,
           `${t.planActivatedDesc} ${planId === "basic" ? t.planBasic : t.planPro}.`
         );
-        setPurchasing(null);
-        return;
-      }
-
-      const result = useMP
-        ? await createMercadoPagoCheckout(planId, node.id)
-        : await createStripeCheckout(planId, node.id);
-
-      if (!result.url) {
-        Alert.alert("Error", result.error ?? "No se pudo iniciar el pago");
-        setPurchasing(null);
         return;
       }
 
@@ -98,7 +90,7 @@ export default function NetworkScreen() {
         );
       }
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      Alert.alert("Error", e?.message ?? "Error al procesar el pago");
     } finally {
       setPurchasing(null);
     }

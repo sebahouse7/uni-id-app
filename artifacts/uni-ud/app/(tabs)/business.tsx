@@ -366,20 +366,20 @@ export default function BusinessScreen() {
 
       {/* Modal — Crear/Editar empresa */}
       <Modal visible={showForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowForm(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
           <View style={[s.modal, { backgroundColor: c.bg }]}>
             <View style={[s.modalHeader, { borderBottomColor: c.border }]}>
-              <Pressable onPress={() => setShowForm(false)}>
+              <Pressable onPress={() => setShowForm(false)} hitSlop={12}>
                 <Text style={[s.modalCancel, { color: c.sub }]}>{t.cancel}</Text>
               </Pressable>
               <Text style={[s.modalTitle, { color: c.text }]}>
                 {editMode ? (t.editBusiness ?? "Editar empresa") : (t.addBusiness ?? "Registrar empresa")}
               </Text>
-              <Pressable onPress={handleSave}>
+              <Pressable onPress={handleSave} hitSlop={12}>
                 <Text style={[s.modalSave, { color: c.accent }]}>{t.save}</Text>
               </Pressable>
             </View>
-            <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }}>
+            <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
               {/* Nombre */}
               <FormField label={`${t.businessName ?? "Nombre"} *`} value={form.name}
                 onChangeText={(v) => setForm((f) => ({ ...f, name: v }))} colors={c} placeholder="Ej: Monteleón Tech" />
@@ -429,6 +429,15 @@ export default function BusinessScreen() {
                   style={[s.formInput, { color: c.text, borderColor: c.border, backgroundColor: c.card, minHeight: 80, textAlignVertical: "top", paddingTop: 10 }]}
                 />
               </View>
+
+              {/* Save button at bottom — always reachable */}
+              <Pressable
+                onPress={handleSave}
+                style={[s.bottomSaveBtn, { backgroundColor: c.accent }]}
+              >
+                <Feather name="check" size={18} color="#fff" />
+                <Text style={s.bottomSaveBtnText}>{t.save}</Text>
+              </Pressable>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -594,4 +603,9 @@ const s = StyleSheet.create({
     borderRadius: Radii.pill, borderWidth: 1,
   },
   typeChipText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  bottomSaveBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 10, paddingVertical: 16, borderRadius: Radii.xl, marginTop: 8,
+  },
+  bottomSaveBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
 });
