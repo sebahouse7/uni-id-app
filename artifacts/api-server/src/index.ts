@@ -4,9 +4,17 @@ import "dotenv/config";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { checkSmtpOnStartup } from "./lib/email";
+import { runMigration } from "./lib/db";
 
 // Puerto: usa PORT del .env o 8080 como default
 const port = Math.abs(Number(process.env["PORT"] ?? 8080)) || 8080;
+
+// Run DB migration before starting server — safe to repeat (IF NOT EXISTS)
+if (process.env["DATABASE_URL"]) {
+  runMigration().catch((err) => {
+    logger.error({ err }, "❌ Migration failed — server starting anyway, DB endpoints may fail");
+  });
+}
 
 const server = app.listen(port, "0.0.0.0", () => {
   logger.info({ port }, "Server listening");
