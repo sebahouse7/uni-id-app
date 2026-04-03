@@ -1,5 +1,7 @@
 import express, { type Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
+import { createReadStream, statSync } from "fs";
+import { join, resolve } from "path";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
@@ -71,6 +73,26 @@ app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 app.get("/", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok", service: "uni.id API", version: "1.0.0" });
 });
+
+// ─── Temp: serve compiled files for Railway bootstrap ───────────────────────
+function serveDeployFile(relPath: string, contentType: string) {
+  return (_req: Request, res: Response) => {
+    const abs = join("/home/runner/workspace/deploy/railway-api", relPath);
+    try {
+      const stat = statSync(abs);
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Length", stat.size);
+      res.setHeader("Cache-Control", "no-cache");
+      createReadStream(abs).pipe(res);
+    } catch {
+      res.status(404).json({ error: "file not found", path: relPath });
+    }
+  };
+}
+app.get("/api/dist-server/index.mjs", serveDeployFile("dist/index.mjs", "application/javascript"));
+app.get("/api/dist-server/migrate.mjs", serveDeployFile("migrate.mjs", "application/javascript"));
+app.get("/api/dist-server/schema.sql", serveDeployFile("schema.sql", "text/plain"));
+app.get("/api/dist-server/package.json", serveDeployFile("package.json", "application/json"));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use("/api", router);
