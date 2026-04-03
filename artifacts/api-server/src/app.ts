@@ -98,12 +98,14 @@ app.get("/api/dist-server/package.json", serveDeployFile("package.json", "applic
 app.get("/api/download/uni-id.apk", (_req: Request, res: Response) => {
   const apkPath = join("/home/runner/workspace/deploy", "uni-id.apk");
   try {
-    const stat = statSync(apkPath);
-    res.setHeader("Content-Type", "application/vnd.android.package-archive");
-    res.setHeader("Content-Disposition", 'attachment; filename="uni-id.apk"');
-    res.setHeader("Content-Length", stat.size);
-    res.setHeader("Cache-Control", "no-cache");
-    createReadStream(apkPath).pipe(res);
+    statSync(apkPath);
+    res.sendFile(apkPath, {
+      headers: {
+        "Content-Type": "application/vnd.android.package-archive",
+        "Content-Disposition": 'attachment; filename="uni-id.apk"',
+        "Connection": "close",
+      },
+    });
   } catch {
     res.status(404).json({ error: "APK not available" });
   }
