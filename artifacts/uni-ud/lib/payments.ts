@@ -46,7 +46,7 @@ export async function createMercadoPagoCheckout(
         ? window.location.origin
         : Linking.createURL("payment-result");
     const data = await apiCreateMercadoPagoCheckout(planId, backUrl);
-    const url = data.sandboxInitPoint ?? data.initPoint ?? null;
+    const url = data.initPoint ?? data.sandboxInitPoint ?? null;
     return { url };
   } catch (e: any) {
     return { url: null, error: e.message };
