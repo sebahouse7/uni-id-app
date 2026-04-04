@@ -79,11 +79,12 @@ function DocCategoryCard({
   const { t } = useLanguage();
 
   return (
-    <AnimatedPressable onPress={onPress} style={styles.catCardWrap} scale={0.95}>
-      <View style={[styles.catCard, { backgroundColor: colors.backgroundCard, borderColor: count > 0 ? cat.color + "40" : colors.border }, Shadows.sm]}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-          <View style={[styles.catIcon, { backgroundColor: cat.color + "1A" }]}>
-            <Feather name={cat.icon as any} size={18} color={cat.color} />
+    <AnimatedPressable onPress={onPress} style={styles.catCardWrap} scale={0.96}>
+      <View style={[styles.catCard, { backgroundColor: colors.backgroundCard, borderColor: count > 0 ? cat.color + "50" : colors.border }, Shadows.sm]}>
+        {/* Icon + badge row */}
+        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10 }}>
+          <View style={[styles.catIcon, { backgroundColor: cat.color + "18" }]}>
+            <Feather name={cat.icon as any} size={20} color={cat.color} />
           </View>
           {count > 0 && (
             <View style={[styles.catBadge, { backgroundColor: cat.color }]}>
@@ -91,11 +92,10 @@ function DocCategoryCard({
             </View>
           )}
         </View>
-        <Text style={[styles.catLabel, { color: colors.text }]} numberOfLines={1}>{cat.label}</Text>
-        <Text style={[styles.catSub, { color: colors.textSecondary }]} numberOfLines={2}>
-          {lastDoc
-            ? lastDoc.title
-            : t.emptyDocCategory ?? "Sin documentos"}
+        {/* Full category name — no truncation */}
+        <Text style={[styles.catLabel, { color: colors.text }]}>{cat.label}</Text>
+        <Text style={[styles.catSub, { color: colors.textSecondary }]} numberOfLines={1}>
+          {lastDoc ? lastDoc.title : t.emptyDocCategory ?? "Sin documentos"}
         </Text>
       </View>
     </AnimatedPressable>
@@ -631,19 +631,19 @@ const styles = StyleSheet.create({
 
   catGrid: {
     flexDirection: "row", flexWrap: "wrap",
-    paddingHorizontal: Spacing.md - 6, gap: 10, marginBottom: 16,
+    paddingHorizontal: Spacing.md, gap: 12, marginBottom: 16,
   },
-  catCardWrap: { width: "30%", flex: 1 },
-  catCard: { borderRadius: 14, borderWidth: 1, padding: 12, minHeight: 96 },
-  catIcon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  catCardWrap: { width: "47%", flexGrow: 1 },
+  catCard: { borderRadius: 16, borderWidth: 1, padding: 14, minHeight: 100 },
+  catIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   catBadge: {
-    position: "absolute", top: -4, right: -4,
-    minWidth: 18, height: 18, borderRadius: 9,
-    alignItems: "center", justifyContent: "center", paddingHorizontal: 4,
+    position: "absolute", top: -5, right: -5,
+    minWidth: 20, height: 20, borderRadius: 10,
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 5,
   },
-  catBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
-  catLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
-  catSub: { fontSize: 10, fontFamily: "Inter_400Regular", lineHeight: 14 },
+  catBadgeText: { color: "#fff", fontSize: 11, fontFamily: "Inter_700Bold" },
+  catLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
+  catSub: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 15 },
 
   subSectionTitle: { fontSize: 12, fontFamily: "Inter_500Medium", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 },
   recentDocRow: {

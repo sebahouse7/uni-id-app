@@ -124,15 +124,21 @@ router.post(
   requireAuth,
   [
     body("planId").isIn(["basic", "pro"]),
-    body("backUrl").isURL({ require_protocol: true }),
+    body("backUrl").isString().notEmpty(),
   ],
   async (req: Request, res: Response) => {
     if (!validate(req, res)) return;
     if (!MP_TOKEN) { res.status(503).json({ error: "MercadoPago no configurado" }); return; }
 
-    const { planId, backUrl } = req.body as { planId: "basic" | "pro"; backUrl: string };
+    const { planId, backUrl: rawBackUrl } = req.body as { planId: "basic" | "pro"; backUrl: string };
     const plan = PLANS[planId];
     const userId = req.user!.sub;
+
+    // MP back_urls must be HTTPS — fall back to Railway base URL if client sends a deeplink
+    const RAILWAY_BASE = process.env["API_BASE_URL"]
+      ? process.env["API_BASE_URL"].replace(/\/api$/, "")
+      : "https://expressjs-production-8bfc.up.railway.app";
+    const backUrl = rawBackUrl?.startsWith("https://") ? rawBackUrl : RAILWAY_BASE;
 
     try {
       const mp = new MercadoPagoConfig({ accessToken: MP_TOKEN });
@@ -157,7 +163,7 @@ router.post(
           statement_descriptor: "uni.id",
           notification_url: process.env["API_BASE_URL"]
             ? `${process.env["API_BASE_URL"]}/api/subscriptions/webhook/mercadopago`
-            : undefined,
+            : `${RAILWAY_BASE}/api/subscriptions/webhook/mercadopago`,
         },
       });
 

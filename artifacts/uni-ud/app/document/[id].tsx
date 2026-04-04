@@ -25,10 +25,14 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
 const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|bmp|heic|avif)$/i;
 
-function isImageUri(uri?: string): boolean {
+function isImageUri(uri?: string, fileName?: string): boolean {
   if (!uri) return false;
   if (IMAGE_EXTS.test(uri)) return true;
   if (uri.startsWith("data:image/")) return true;
+  // content:// or file:// URIs without extension — check fileName
+  if (fileName && IMAGE_EXTS.test(fileName)) return true;
+  // Android content:// URIs from gallery are almost always images
+  if (uri.startsWith("content://media/")) return true;
   return false;
 }
 
@@ -45,7 +49,7 @@ export default function DocumentDetailScreen() {
 
   const doc = documents.find((d) => String(d.id) === String(id));
   const cat = doc ? CATEGORIES.find((c) => c.key === doc.category) : null;
-  const hasImage = isImageUri(doc?.fileUri);
+  const hasImage = isImageUri(doc?.fileUri, doc?.fileName);
 
   if (!doc) {
     return (
@@ -201,14 +205,27 @@ export default function DocumentDetailScreen() {
           </Pressable>
         )}
 
-        {/* ── File badge (for non-image files) ── */}
-        {doc.fileName && !hasImage && (
-          <View style={[styles.fileBadge, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
-            <Feather name="paperclip" size={16} color={accentColor} />
-            <Text style={[styles.fileNameText, { color: colors.text }]} numberOfLines={1}>
-              {doc.fileName}
-            </Text>
-          </View>
+        {/* ── File badge + open button (for non-image files) ── */}
+        {doc.fileUri && !hasImage && (
+          <Pressable
+            onPress={handleShare}
+            style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+          >
+            <View style={[styles.fileBadge, { backgroundColor: colors.backgroundCard, borderColor: accentColor + "50" }]}>
+              <View style={[styles.fileIconCircle, { backgroundColor: accentColor + "18" }]}>
+                <Feather name="file-text" size={22} color={accentColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fileNameText, { color: colors.text }]} numberOfLines={1}>
+                  {doc.fileName ?? "Archivo adjunto"}
+                </Text>
+                <Text style={[styles.fileOpenHint, { color: accentColor }]}>
+                  Tocá para abrir o compartir
+                </Text>
+              </View>
+              <Feather name="external-link" size={18} color={accentColor} />
+            </View>
+          </Pressable>
         )}
 
         {/* ── Details ── */}
@@ -370,12 +387,20 @@ const styles = StyleSheet.create({
   fileBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
   },
-  fileNameText: { fontSize: 14, fontFamily: "Inter_500Medium", flex: 1 },
+  fileIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fileNameText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  fileOpenHint: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
 
   sectionTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, textTransform: "uppercase" },
   card: {
