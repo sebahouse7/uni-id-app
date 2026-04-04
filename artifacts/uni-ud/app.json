@@ -6,11 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "uni-ud",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
+      "image": "./assets/images/splash-bg.png",
+      "resizeMode": "cover",
       "backgroundColor": "#060B18"
     },
     "ios": {
@@ -38,8 +38,8 @@
     },
     "web": {
       "favicon": "./assets/images/icon.png",
-      "themeColor": "#060B18",
-      "backgroundColor": "#060B18"
+      "themeColor": "#1A6FE8",
+      "backgroundColor": "#FFFFFF"
     },
     "plugins": [
       [

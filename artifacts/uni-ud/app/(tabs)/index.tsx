@@ -226,10 +226,10 @@ export default function HomeScreen() {
                 <Text style={styles.idName} numberOfLines={1}>{node?.name ?? "Mi Identidad"}</Text>
                 <Text style={styles.idMeta} numberOfLines={1}>
                   {node?.globalId
-                    ? node.globalId.replace("did:uniid:", "did:uniid:").slice(0, 22) + "…"
+                    ? `#${node.globalId.replace("did:uniid:", "").replace(/-/g, "").slice(0, 9).toUpperCase()}`
                     : node?.id
-                    ? `ID · ${node.id.slice(0, 8).toUpperCase()}`
-                    : "ID · ········"}
+                    ? `#${node.id.replace(/-/g, "").slice(0, 9).toUpperCase()}`
+                    : "#·········"}
                 </Text>
                 <View style={styles.idVerifiedRow}>
                   <View style={styles.idPulse} />

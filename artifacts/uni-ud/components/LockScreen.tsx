@@ -1,20 +1,21 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
+  Image,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
-  useColorScheme,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import Colors from "@/constants/colors";
-import { Radii } from "@/constants/design";
 import { useAuth } from "@/context/AuthContext";
+
+const LOGO = require("../assets/images/logo-uniid.png");
+const PIN_LENGTH = 4;
 
 function Countdown({ lockedUntil, onExpire }: { lockedUntil: number; onExpire: () => void }) {
   const [seconds, setSeconds] = useState(Math.ceil((lockedUntil - Date.now()) / 1000));
@@ -23,19 +24,45 @@ function Countdown({ lockedUntil, onExpire }: { lockedUntil: number; onExpire: (
     const t = setTimeout(() => setSeconds((s) => s - 1), 1000);
     return () => clearTimeout(t);
   }, [seconds]);
+  return <Text style={styles.lockoutText}>Bloqueado por {seconds}s</Text>;
+}
+
+function PulsingRing({ animate }: { animate: boolean }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.5)).current;
+  useEffect(() => {
+    if (!animate) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1.18, duration: 900, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0, duration: 900, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.5, duration: 0, useNativeDriver: true }),
+        ]),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [animate]);
   return (
-    <Text style={styles.lockoutText}>
-      Bloqueado por {seconds}s
-    </Text>
+    <Animated.View
+      style={[
+        styles.pulseRing,
+        { transform: [{ scale }], opacity },
+      ]}
+    />
   );
 }
 
 export function LockScreen() {
   const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme !== "light";
-  const colors = isDark ? Colors.dark : Colors.light;
-  const { unlock, hasBiometrics, biometricsEnabled, hasPin, verifyPin, setPin, failedAttempts, lockedUntil, successState } = useAuth();
+  const {
+    unlock, hasBiometrics, biometricsEnabled, hasPin,
+    verifyPin, setPin, failedAttempts, lockedUntil, successState,
+  } = useAuth();
 
   const canUseBiometrics = hasBiometrics && biometricsEnabled;
   const [mode, setMode] = useState<"bio" | "pin" | "setpin">(
@@ -55,37 +82,23 @@ export function LockScreen() {
     }
   }, [mode, canUseBiometrics]);
 
-  const shakeAnim = useRef(new Animated.Value(0)).current;
-  const fadeIn = useRef(new Animated.Value(0)).current;
-  const successScale = useRef(new Animated.Value(1)).current;
-  const successOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(fadeIn, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-  }, []);
-
-  useEffect(() => {
-    if (successState) {
-      Animated.parallel([
-        Animated.spring(successScale, { toValue: 1.15, useNativeDriver: true }),
-        Animated.timing(successOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      ]).start();
-    } else {
-      successScale.setValue(1);
-      successOpacity.setValue(0);
-    }
-  }, [successState]);
-
   useEffect(() => {
     setIsLocked(lockedUntil != null && lockedUntil > Date.now());
   }, [lockedUntil]);
 
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const fadeIn = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+  }, []);
+
   const shake = () => {
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 12, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -12, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 14, duration: 55, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -14, duration: 55, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 8, duration: 55, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 55, useNativeDriver: true }),
     ]).start();
   };
 
@@ -95,7 +108,7 @@ export function LockScreen() {
     setInputPin(next);
     setError("");
 
-    if (next.length === 6) {
+    if (next.length === PIN_LENGTH) {
       if (mode === "setpin") {
         if (step === "enter") {
           setStep("confirm");
@@ -107,7 +120,7 @@ export function LockScreen() {
             await unlock();
           } else {
             shake();
-            setError("Los PINs no coinciden. Intentá de nuevo.");
+            setError("Los PINs no coinciden.");
             setInputPin("");
             setStep("enter");
             setConfirmPin("");
@@ -118,12 +131,10 @@ export function LockScreen() {
         if (!ok) {
           shake();
           const remaining = 5 - (failedAttempts + 1);
-          if (remaining > 0) {
-            setError(`PIN incorrecto · ${remaining} intento${remaining !== 1 ? "s" : ""} restante${remaining !== 1 ? "s" : ""}`);
-          } else {
-            setError("Cuenta bloqueada temporalmente");
-            setIsLocked(true);
-          }
+          setError(remaining > 0
+            ? `PIN incorrecto · ${remaining} intento${remaining !== 1 ? "s" : ""} restante${remaining !== 1 ? "s" : ""}`
+            : "Cuenta bloqueada temporalmente");
+          if (remaining <= 0) setIsLocked(true);
           setInputPin("");
         }
       }
@@ -144,22 +155,17 @@ export function LockScreen() {
 
   const titleText =
     mode === "setpin"
-      ? step === "enter"
-        ? "Creá tu PIN de 6 dígitos"
-        : "Confirmá tu PIN"
-      : isLocked
-      ? "Cuenta bloqueada"
+      ? step === "enter" ? "Creá tu PIN de acceso" : "Confirmá tu PIN"
+      : isLocked ? "Cuenta bloqueada"
       : "Ingresá tu PIN";
 
   if (successState) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Animated.View style={[styles.successContainer, { opacity: successOpacity, transform: [{ scale: successScale }] }]}>
-          <LinearGradient colors={["#22C55E", "#16A34A"]} style={styles.successCircle}>
-            <Feather name="check" size={40} color="#fff" />
-          </LinearGradient>
-          <Text style={[styles.successText, { color: colors.text }]}>¡Acceso concedido!</Text>
-        </Animated.View>
+      <View style={styles.successContainer}>
+        <LinearGradient colors={["#00D4FF", "#1A6FE8"]} style={styles.successCircle}>
+          <Ionicons name="checkmark" size={44} color="#fff" />
+        </LinearGradient>
+        <Text style={styles.successText}>¡Acceso concedido!</Text>
       </View>
     );
   }
@@ -169,102 +175,92 @@ export function LockScreen() {
       style={[
         styles.container,
         {
-          backgroundColor: colors.background,
-          paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 32,
+          paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 20,
           paddingBottom: insets.bottom + 24,
           opacity: fadeIn,
         },
       ]}
     >
-      {/* Logo & branding */}
+      {/* ── Logo + Branding ── */}
       <View style={styles.logoSection}>
-        <LinearGradient
-          colors={successState ? ["#22C55E", "#16A34A"] : ["#1A6FE8", "#0D8AEB"]}
-          style={styles.logoIcon}
-        >
-          <Feather name="shield" size={28} color="#fff" />
-        </LinearGradient>
-        <Text style={[styles.appName, { color: colors.text }]}>uni.id</Text>
-        <Text style={[styles.appTagline, { color: colors.textSecondary }]}>
-          {mode === "bio" ? "Verificá tu identidad" : titleText}
-        </Text>
+        <Image source={LOGO} style={styles.logoImg} resizeMode="contain" />
+        <Text style={styles.appName}>UNI ID</Text>
+        <Text style={styles.appTagline}>Sistema de identidad digital segura</Text>
       </View>
 
-      {/* Biometric unlock */}
+      {/* ── Bio mode ── */}
       {mode === "bio" && (
         <View style={styles.bioSection}>
+          <Text style={styles.bioTitle}>Desbloqueá tu identidad</Text>
+          <Text style={styles.bioSubtitle}>Usá tu huella digital para continuar</Text>
+
+          {/* Fingerprint button */}
           <Pressable
             onPress={() => unlock()}
-            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, alignItems: "center" })}
           >
-            <LinearGradient
-              colors={["#1A6FE8", "#0D8AEB"]}
-              style={styles.bioBtn}
-            >
-              <Feather name="unlock" size={26} color="#fff" />
-              <Text style={styles.bioBtnText}>
-                {Platform.OS === "ios" ? "Face ID / Touch ID" : "Huella digital"}
-              </Text>
-            </LinearGradient>
+            <View style={styles.bioRingOuter}>
+              <PulsingRing animate={true} />
+              <LinearGradient
+                colors={["#00D4FF", "#1A6FE8", "#6C47FF"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.bioRingGradient}
+              >
+                <View style={styles.bioInner}>
+                  <Ionicons name="finger-print" size={56} color="#1A6FE8" />
+                </View>
+              </LinearGradient>
+            </View>
           </Pressable>
+          <Text style={styles.bioHint}>Tocá para usar tu huella</Text>
 
-          <Pressable
-            onPress={() => setMode(hasPin ? "pin" : "setpin")}
-            style={styles.altBtn}
-          >
-            <Text style={[styles.altBtnText, { color: colors.tint }]}>
-              {hasPin ? "Usar PIN en su lugar" : "Crear PIN de respaldo"}
+          <View style={styles.divider} />
+
+          <Text style={styles.orText}>O usá tu PIN</Text>
+          <Pressable onPress={() => setMode(hasPin ? "pin" : "setpin")} style={{ paddingVertical: 4 }}>
+            <Text style={styles.altLink}>
+              {hasPin ? "Ingresar con PIN" : "Crear PIN de respaldo"}
             </Text>
           </Pressable>
         </View>
       )}
 
-      {/* PIN input */}
+      {/* ── PIN / SetPIN mode ── */}
       {(mode === "pin" || mode === "setpin") && (
         <View style={styles.pinSection}>
+          <Text style={styles.bioTitle}>{titleText}</Text>
+          <Text style={styles.bioSubtitle}>
+            {mode === "setpin" && step === "confirm"
+              ? "Repetí el PIN para confirmar"
+              : "Ingresá tu código de acceso"}
+          </Text>
+
           {/* PIN dots */}
-          <Animated.View
-            style={[styles.dotsRow, { transform: [{ translateX: shakeAnim }] }]}
-          >
-            {[...Array(6)].map((_, i) => (
+          <Animated.View style={[styles.dotsRow, { transform: [{ translateX: shakeAnim }] }]}>
+            {[...Array(PIN_LENGTH)].map((_, i) => (
               <View
                 key={i}
                 style={[
                   styles.pinDot,
-                  {
-                    backgroundColor:
-                      i < pin.length
-                        ? colors.tint
-                        : isDark
-                        ? "#1E2D4A"
-                        : "#E2E8F0",
-                    transform: [{ scale: i < pin.length ? 1.15 : 1 }],
-                  },
+                  { backgroundColor: i < pin.length ? "#1A6FE8" : "#E2E8F0" },
                 ]}
               />
             ))}
           </Animated.View>
 
-          {/* Lockout countdown */}
+          {/* Error / lockout */}
           {isLocked && lockedUntil ? (
-            <View style={[styles.lockoutBadge, { backgroundColor: "#E5353518", borderColor: "#E5353540" }]}>
-              <Feather name="lock" size={14} color="#E53535" />
+            <View style={styles.lockoutBadge}>
               <Countdown
                 lockedUntil={lockedUntil}
-                onExpire={() => {
-                  setIsLocked(false);
-                  setError("");
-                  setInputPin("");
-                }}
+                onExpire={() => { setIsLocked(false); setError(""); setInputPin(""); }}
               />
             </View>
           ) : error ? (
-            <View style={styles.errorRow}>
-              <Feather name="alert-circle" size={14} color="#F56565" />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
+            <Text style={styles.errorText}>{error}</Text>
           ) : (
-            <View style={{ height: 30 }} />
+            <View style={{ height: 24 }} />
           )}
 
           {/* Keypad */}
@@ -281,33 +277,33 @@ export function LockScreen() {
                     }}
                     style={({ pressed }) => [
                       styles.key,
-                      d === ""
-                        ? styles.keyEmpty
-                        : {
-                            backgroundColor: pressed
-                              ? colors.tint + "25"
-                              : colors.backgroundCard,
-                            borderColor: colors.border,
-                          },
+                      d === "" ? styles.keyEmpty : { backgroundColor: pressed ? "#E8F0FF" : "#F7F9FC" },
                     ]}
                   >
                     {d === "del" ? (
-                      <Feather name="delete" size={20} color={colors.text} />
+                      <Ionicons name="backspace-outline" size={22} color="#334155" />
                     ) : d !== "" ? (
-                      <Text style={[styles.keyText, { color: colors.text }]}>{d}</Text>
+                      <Text style={styles.keyText}>{d}</Text>
                     ) : null}
                   </Pressable>
                 ))}
               </View>
             ))}
           </View>
+
+          {/* Forgot PIN / switch to bio */}
+          <View style={styles.footerRow}>
+            <Pressable onPress={() => setMode("setpin")} style={{ paddingVertical: 6 }}>
+              <Text style={styles.altLink}>¿Olvidaste tu PIN?</Text>
+            </Pressable>
+            {canUseBiometrics && (
+              <Pressable onPress={() => setMode("bio")} style={{ paddingVertical: 6 }}>
+                <Text style={styles.altLink}>Usar huella</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       )}
-
-      {/* Footer */}
-      <Text style={[styles.footer, { color: colors.textSecondary }]}>
-        🔒 Cifrado AES-256 · Datos protegidos en tu dispositivo
-      </Text>
     </Animated.View>
   );
 }
@@ -315,144 +311,195 @@ export function LockScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
-    justifyContent: "space-between",
+    paddingHorizontal: 32,
   },
   successContainer: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     gap: 20,
   },
   successCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     alignItems: "center",
     justifyContent: "center",
   },
   successText: {
     fontSize: 24,
     fontFamily: "Inter_700Bold",
+    color: "#0A1628",
   },
+
   logoSection: {
     alignItems: "center",
-    gap: 12,
+    gap: 8,
+    marginBottom: 28,
   },
-  logoIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
+  logoImg: {
+    width: 160,
+    height: 160,
   },
   appName: {
-    fontSize: 32,
+    fontSize: 36,
     fontFamily: "Inter_700Bold",
+    color: "#0A1628",
+    letterSpacing: 1,
   },
   appTagline: {
-    fontSize: 16,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
+    color: "#64748B",
+    textAlign: "center",
   },
 
   bioSection: {
     alignItems: "center",
-    gap: 16,
+    gap: 14,
     flex: 1,
+    width: "100%",
+  },
+  bioTitle: {
+    fontSize: 22,
+    fontFamily: "Inter_700Bold",
+    color: "#0A1628",
+    textAlign: "center",
+  },
+  bioSubtitle: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: "#64748B",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  bioRingOuter: {
+    width: 156,
+    height: 156,
+    alignItems: "center",
     justifyContent: "center",
   },
-  bioBtn: {
-    flexDirection: "row",
+  pulseRing: {
+    position: "absolute",
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    borderWidth: 2,
+    borderColor: "#00D4FF",
+  },
+  bioRingGradient: {
+    width: 148,
+    height: 148,
+    borderRadius: 74,
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 36,
-    paddingVertical: 18,
-    borderRadius: Radii.xl,
+    justifyContent: "center",
+    padding: 4,
   },
-  bioBtnText: {
-    color: "#fff",
-    fontSize: 16,
+  bioInner: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 70,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bioHint: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: "#64748B",
+    marginTop: 4,
+  },
+  divider: {
+    width: "100%",
+    height: 1,
+    backgroundColor: "#E2E8F0",
+    marginVertical: 8,
+  },
+  orText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: "#64748B",
+  },
+  altLink: {
+    fontSize: 14,
     fontFamily: "Inter_600SemiBold",
+    color: "#1A6FE8",
   },
-  altBtn: { paddingVertical: 10 },
-  altBtnText: { fontSize: 14, fontFamily: "Inter_500Medium" },
 
   pinSection: {
     alignItems: "center",
     gap: 8,
     flex: 1,
-    justifyContent: "center",
     width: "100%",
   },
   dotsRow: {
     flexDirection: "row",
-    gap: 16,
+    gap: 18,
+    marginTop: 8,
     marginBottom: 4,
   },
   pinDot: {
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
   },
   lockoutBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: Radii.pill,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 20,
     borderWidth: 1,
+    borderColor: "#FECACA",
   },
   lockoutText: {
-    color: "#E53535",
-    fontSize: 14,
+    color: "#EF4444",
+    fontSize: 13,
     fontFamily: "Inter_600SemiBold",
   },
-  errorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    height: 30,
-  },
   errorText: {
-    color: "#F56565",
+    color: "#EF4444",
     fontSize: 13,
     fontFamily: "Inter_500Medium",
+    textAlign: "center",
+    height: 24,
   },
   keypad: {
-    gap: 12,
-    width: "78%",
-    maxWidth: 310,
-    marginTop: 16,
+    gap: 10,
+    width: "90%",
+    maxWidth: 300,
+    marginTop: 12,
   },
   keyRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
     justifyContent: "center",
   },
   key: {
     flex: 1,
-    aspectRatio: 1.5,
-    borderRadius: Radii.lg,
+    height: 58,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   keyEmpty: {
     flex: 1,
-    aspectRatio: 1.5,
+    height: 58,
     backgroundColor: "transparent",
+    borderWidth: 0,
   },
   keyText: {
     fontSize: 22,
     fontFamily: "Inter_600SemiBold",
+    color: "#0A1628",
   },
-
-  footer: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    paddingHorizontal: 40,
+  footerRow: {
+    flexDirection: "row",
+    gap: 24,
+    marginTop: 8,
   },
 });

@@ -69,12 +69,9 @@ export default function NetworkScreen() {
         : await createStripeCheckout(planId, node.id);
 
       if (!result.url) {
-        // Payment gateway not configured — activate plan directly (demo mode)
-        await new Promise((r) => setTimeout(r, 900));
-        await updateNode({ networkPlan: planId });
         Alert.alert(
-          t.planActivated,
-          `${t.planActivatedDesc} ${planId === "basic" ? t.planBasic : t.planPro}.`
+          "Pago no disponible",
+          "El sistema de pagos no está configurado en este momento. Por favor contactá a soporte@uniid.app."
         );
         return;
       }

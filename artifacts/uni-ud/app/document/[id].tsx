@@ -1,9 +1,12 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+import * as Sharing from "expo-sharing";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -11,11 +14,23 @@ import {
   Text,
   View,
   useColorScheme,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { CATEGORIES, useIdentity } from "@/context/IdentityContext";
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
+
+const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|bmp|heic|avif)$/i;
+
+function isImageUri(uri?: string): boolean {
+  if (!uri) return false;
+  if (IMAGE_EXTS.test(uri)) return true;
+  if (uri.startsWith("data:image/")) return true;
+  return false;
+}
 
 export default function DocumentDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -25,9 +40,12 @@ export default function DocumentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { documents, deleteDocument } = useIdentity();
   const [deleting, setDeleting] = useState(false);
+  const [imgModalVisible, setImgModalVisible] = useState(false);
+  const [imgZoom, setImgZoom] = useState(1);
 
   const doc = documents.find((d) => String(d.id) === String(id));
   const cat = doc ? CATEGORIES.find((c) => c.key === doc.category) : null;
+  const hasImage = isImageUri(doc?.fileUri);
 
   if (!doc) {
     return (
@@ -62,6 +80,20 @@ export default function DocumentDetailScreen() {
     );
   };
 
+  const handleShare = async () => {
+    if (!doc.fileUri) return;
+    try {
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(doc.fileUri, { dialogTitle: doc.title });
+      } else {
+        Alert.alert("Compartir no disponible", "Tu dispositivo no soporta compartir archivos.");
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "No se pudo compartir el archivo");
+    }
+  };
+
   const infoRows = [
     { label: "Categoría", value: cat?.label ?? "—", icon: cat?.icon ?? "folder" },
     {
@@ -84,9 +116,11 @@ export default function DocumentDetailScreen() {
     },
   ];
 
+  const accentColor = cat?.color ?? colors.tint;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
+      {/* ── Header ── */}
       <View
         style={[
           styles.header,
@@ -106,13 +140,23 @@ export default function DocumentDetailScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
           {doc.title}
         </Text>
-        <Pressable
-          onPress={handleDelete}
-          disabled={deleting}
-          style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.7 : 1 }]}
-        >
-          <Feather name="trash-2" size={20} color={colors.danger} />
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 4 }}>
+          {doc.fileUri && (
+            <Pressable
+              onPress={handleShare}
+              style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Feather name="share-2" size={20} color={colors.tint} />
+            </Pressable>
+          )}
+          <Pressable
+            onPress={handleDelete}
+            disabled={deleting}
+            style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Feather name="trash-2" size={20} color={colors.danger} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -123,9 +167,9 @@ export default function DocumentDetailScreen() {
           { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 32 },
         ]}
       >
-        {/* Hero */}
-        <View style={[styles.hero, { backgroundColor: (cat?.color ?? "#1A6FE8") + "18" }]}>
-          <View style={[styles.heroIcon, { backgroundColor: cat?.color ?? "#1A6FE8" }]}>
+        {/* ── Hero ── */}
+        <View style={[styles.hero, { backgroundColor: accentColor + "18" }]}>
+          <View style={[styles.heroIcon, { backgroundColor: accentColor }]}>
             <Feather name={(cat?.icon as any) ?? "file"} size={36} color="#fff" />
           </View>
           <Text style={[styles.heroTitle, { color: colors.text }]}>{doc.title}</Text>
@@ -134,24 +178,47 @@ export default function DocumentDetailScreen() {
           ) : null}
         </View>
 
-        {/* File badge */}
-        {doc.fileName && (
+        {/* ── Image Preview ── */}
+        {hasImage && doc.fileUri && (
+          <Pressable
+            onPress={() => setImgModalVisible(true)}
+            style={({ pressed }) => ({ opacity: pressed ? 0.95 : 1 })}
+          >
+            <View style={[styles.imageCard, { borderColor: colors.border, backgroundColor: colors.backgroundCard }]}>
+              <Image
+                source={{ uri: doc.fileUri }}
+                style={styles.previewImage}
+                contentFit="cover"
+                transition={200}
+              />
+              <View style={styles.imageOverlay}>
+                <View style={styles.zoomBadge}>
+                  <Feather name="zoom-in" size={14} color="#fff" />
+                  <Text style={styles.zoomText}>Tocá para ampliar</Text>
+                </View>
+              </View>
+            </View>
+          </Pressable>
+        )}
+
+        {/* ── File badge (for non-image files) ── */}
+        {doc.fileName && !hasImage && (
           <View style={[styles.fileBadge, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
-            <Feather name="paperclip" size={16} color={cat?.color ?? colors.tint} />
+            <Feather name="paperclip" size={16} color={accentColor} />
             <Text style={[styles.fileNameText, { color: colors.text }]} numberOfLines={1}>
               {doc.fileName}
             </Text>
           </View>
         )}
 
-        {/* Details */}
+        {/* ── Details ── */}
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Detalles</Text>
         <View style={[styles.card, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
           {infoRows.map((row, i) => (
             <View key={row.label}>
               <View style={styles.infoRow}>
-                <View style={[styles.infoIcon, { backgroundColor: (cat?.color ?? colors.tint) + "18" }]}>
-                  <Feather name={row.icon as any} size={15} color={cat?.color ?? colors.tint} />
+                <View style={[styles.infoIcon, { backgroundColor: accentColor + "18" }]}>
+                  <Feather name={row.icon as any} size={15} color={accentColor} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{row.label}</Text>
@@ -165,33 +232,78 @@ export default function DocumentDetailScreen() {
           ))}
         </View>
 
-        {/* Security note */}
+        {/* ── Security note ── */}
         <View style={[styles.securityNote, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
           <Feather name="lock" size={16} color={colors.tint} />
           <Text style={[styles.securityText, { color: colors.textSecondary }]}>
-            Este documento está almacenado de forma segura en tu nodo de identidad uni.id
+            Almacenado en tu nodo de identidad · Cifrado AES-256
           </Text>
         </View>
 
-        {/* Delete button */}
+        {/* ── Actions ── */}
+        {doc.fileUri && (
+          <Pressable
+            onPress={handleShare}
+            style={({ pressed }) => [
+              styles.actionBtn,
+              { backgroundColor: colors.tint + "12", borderColor: colors.tint + "40", opacity: pressed ? 0.8 : 1 },
+            ]}
+          >
+            <Feather name="share-2" size={18} color={colors.tint} />
+            <Text style={[styles.actionBtnText, { color: colors.tint }]}>Compartir documento</Text>
+          </Pressable>
+        )}
+
         <Pressable
           onPress={handleDelete}
           disabled={deleting}
           style={({ pressed }) => [
-            styles.deleteBtn,
-            {
-              backgroundColor: colors.danger + "15",
-              borderColor: colors.danger + "40",
-              opacity: pressed ? 0.8 : 1,
-            },
+            styles.actionBtn,
+            { backgroundColor: colors.danger + "12", borderColor: colors.danger + "40", opacity: pressed ? 0.8 : 1 },
           ]}
         >
           <Feather name="trash-2" size={18} color={colors.danger} />
-          <Text style={[styles.deleteBtnText, { color: colors.danger }]}>
+          <Text style={[styles.actionBtnText, { color: colors.danger }]}>
             {deleting ? "Eliminando..." : "Eliminar documento"}
           </Text>
         </Pressable>
       </ScrollView>
+
+      {/* ── Image Modal (zoom viewer) ── */}
+      {hasImage && doc.fileUri && (
+        <Modal
+          visible={imgModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setImgModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable
+              style={styles.modalClose}
+              onPress={() => setImgModalVisible(false)}
+            >
+              <View style={styles.modalCloseBtn}>
+                <Feather name="x" size={22} color="#fff" />
+              </View>
+            </Pressable>
+            <ScrollView
+              maximumZoomScale={5}
+              minimumZoomScale={1}
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              centerContent
+              style={{ flex: 1 }}
+            >
+              <Image
+                source={{ uri: doc.fileUri }}
+                style={{ width: SCREEN_W, height: SCREEN_H * 0.85 }}
+                contentFit="contain"
+              />
+            </ScrollView>
+            <Text style={styles.zoomHint}>Usá dos dedos para ampliar · Tocá ✕ para cerrar</Text>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -208,23 +320,53 @@ const styles = StyleSheet.create({
   },
   headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerTitle: { flex: 1, fontSize: 17, fontFamily: "Inter_600SemiBold", textAlign: "center", marginHorizontal: 8 },
-  scroll: { padding: 20, gap: 20 },
+  scroll: { padding: 20, gap: 16 },
   hero: {
     borderRadius: 20,
-    padding: 32,
+    padding: 28,
     alignItems: "center",
-    gap: 14,
+    gap: 12,
   },
   heroIcon: {
-    width: 76,
-    height: 76,
-    borderRadius: 22,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 4,
   },
-  heroTitle: { fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "center" },
-  heroDesc: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  heroTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
+  heroDesc: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
+
+  imageCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    height: 240,
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+  },
+  imageOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  zoomBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  zoomText: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+
   fileBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -233,14 +375,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  fileNameText: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
-  sectionTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  fileNameText: { fontSize: 14, fontFamily: "Inter_500Medium", flex: 1 },
+
+  sectionTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, textTransform: "uppercase" },
   card: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    padding: 4,
+    overflow: "hidden",
   },
-  infoRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
   infoIcon: {
     width: 36,
     height: 36,
@@ -248,28 +391,68 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  infoLabel: { fontSize: 11, fontFamily: "Inter_400Regular", marginBottom: 2 },
-  infoValue: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  separator: { height: 1, marginHorizontal: 14 },
+  infoLabel: { fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 1 },
+  infoValue: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  separator: { height: 1, marginLeft: 62 },
+
   securityNote: {
     flexDirection: "row",
-    gap: 12,
+    alignItems: "center",
+    gap: 10,
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    alignItems: "flex-start",
   },
-  securityText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  securityText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
+
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  actionBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+  },
+  modalClose: {
+    position: "absolute",
+    top: 56,
+    right: 20,
+    zIndex: 100,
+  },
+  modalCloseBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  zoomHint: {
+    textAlign: "center",
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    paddingBottom: 24,
+    paddingTop: 8,
+  },
+  notFound: { fontSize: 16, fontFamily: "Inter_500Medium", marginBottom: 12 },
+  back: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   deleteBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    paddingVertical: 14,
-    borderRadius: 12,
+    padding: 16,
+    borderRadius: 14,
     borderWidth: 1,
   },
-  deleteBtnText: { fontSize: 15, fontFamily: "Inter_500Medium" },
-  notFound: { fontSize: 18, fontFamily: "Inter_600SemiBold", marginBottom: 12 },
-  back: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  deleteBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });

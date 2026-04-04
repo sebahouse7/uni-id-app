@@ -3,14 +3,15 @@
 ## App: uni.id (artifacts/uni-ud)
 Mobile identity wallet app built with Expo React Native.
 
-### UI Design System (v2 — Fintech Style)
+### UI Design System (v3 — White Minimal)
 - **Design tokens**: `constants/design.ts` — Spacing, Radii, Shadows, Typography
 - **Reusable components**: `components/ui/AnimatedPressable.tsx` — spring physics press feedback
-- **Color palette**: Navy dark (#060B18 bg), Electric blue (#1A6FE8 primary), Cyan (#00D4FF) accent
+- **Color palette**: White (#FFFFFF bg), Electric blue (#1A6FE8 primary), Cyan (#00D4FF) accent, Navy (#0A1628) text
 - **Font**: Inter (400/500/600/700) via `@expo-google-fonts/inter`
-- **Gradients**: `expo-linear-gradient` used on hero cards, buttons, lock screen
-- **Animations**: `Animated` API (spring physics) for mount-in effects + micro-interactions
-- **Dark mode**: Automatic (follows system) with dedicated color tokens in `constants/colors.ts`
+- **Gradients**: `expo-linear-gradient` used on hero cards, buttons
+- **Animations**: `Animated` API for mount-in effects + micro-interactions + pulse rings
+- **Theme**: Force LIGHT mode (`userInterfaceStyle: "light"` in app.json); Colors.light always used
+- **Assets**: `assets/images/icon.png` (1024x1024 from splash crop), `assets/images/logo-uniid.png` (512x512 circular PNG), `assets/images/splash-bg.png` (1024x1536 dark navy splash)
 
 ### Screens Redesigned
 - `app/(tabs)/index.tsx` — Dashboard: gradient hero card, animated mount, 2-col category grid, shows 6 recent docs
@@ -20,7 +21,8 @@ Mobile identity wallet app built with Expo React Native.
 - `app/(tabs)/security.tsx` — Live viz, trust score card, credentials count, animated threat bar
 - `app/(tabs)/_layout.tsx` — Cleaner tab bar with iOS SF Symbols / Feather icons
 - `app/onboarding.tsx` — Gradient slide icons, animated scale transitions, trust badge
-- `components/LockScreen.tsx` — Gradient logo icon, premium keypad UI, auto-trigger bio on mount
+- `components/LockScreen.tsx` — WHITE bg, PNG logo (logo-uniid.png), "UNI ID" navy text, gradient fingerprint ring button, 4-digit PIN, fallback timeout on splash
+- `components/SplashScreenCustom.tsx` — White bg, PNG logo, "UNI ID" / "human.id labs", fallback setTimeout(2800ms)
 
 ### Security (FASE 1 + 5 — Complete)
 - **PIN hashing**: SHA-256 via expo-crypto, salt: `uni.id::secure::pin::v1::2024` — stored as hash, never plaintext
@@ -83,9 +85,16 @@ Mobile identity wallet app built with Expo React Native.
 - `lib/apiClient.ts` — tokens in localStorage (web) / SecureStore (native)
 - `context/IdentityContext.tsx` — device ID persisted in localStorage on web; session validation on startup clears cache on expiry
 
-### Payments
+### Payments (FIXED)
 - `lib/payments.ts` — MercadoPago + Stripe checkout via authenticated API calls
 - Backend: full webhook handling for MP + Stripe (activate/reject/refund → email notification)
+- **CRITICAL BUG FIXED**: `network.tsx` no longer auto-activates PRO plan if `result.url` is null. Shows error "Pago no disponible" instead. PRO only activates via real backend webhook.
+
+### Document Viewer (Enhanced)
+- `app/document/[id].tsx` — Added image preview (if fileUri is an image extension/data URI)
+- Tap preview → opens fullscreen modal with 5x pinch-to-zoom (ScrollView maximumZoomScale)
+- Share button in header (expo-sharing) and in actions section
+- Image detection: `/\.(jpg|jpeg|png|gif|webp|bmp|heic|avif)$/i` or `data:image/`
 
 # Workspace
 
