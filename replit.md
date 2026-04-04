@@ -55,6 +55,30 @@ Mobile identity wallet app built with Expo React Native.
 - Frontend: `app/shared/[token].tsx` — public branded identity view (no auth required)
 - QR generation: `react-native-qrcode-svg`
 
+### DID Public Identity QR
+- QR in home screen points to `https://expressjs-production-8bfc.up.railway.app/api/identity/${globalId}`
+- Public endpoint `GET /api/identity/:globalId` in `routes/identity.ts` — returns name, bio, plan, verifiedAt (no auth required)
+- Global IDs in format `did:uniid:<uuid>` — auto-generated on register
+
+### Profile Photo Persistence
+- `avatarUri` state lives in `IdentityContext` (NOT local component state)
+- Saved to `AsyncStorage` with key `uniud_avatar_uri_v1`
+- Loaded on app start alongside identity node
+- Exposed as `{ avatarUri, setAvatarUri }` in useIdentity()
+- Home screen `AvatarCircle` shows actual photo when available (falls back to initials gradient)
+- Profile screen uses context `setAvatarUri` when photo is picked
+
+### Security Screen — Biometric Toggle (FASE new)
+- `security.tsx` imports `useAuth` — exposes hasBiometrics, biometricsEnabled, enableBiometrics, disableBiometrics
+- New "Control de acceso" section at top of screen with Switch toggle for biometrics
+- Shows "No disponible" if device lacks biometrics, otherwise enables/disables with one tap
+- Also shows PIN status as always-active confirmation
+
+### App Icon
+- Extracted from user-provided screenshot using ImageMagick
+- Dark navy (#060B18) background, electric blue (#1A6FE8) gradient center
+- Saved as `artifacts/uni-ud/assets/images/icon.png` (1024x1024)
+
 ### Session persistence (web + native)
 - `lib/apiClient.ts` — tokens in localStorage (web) / SecureStore (native)
 - `context/IdentityContext.tsx` — device ID persisted in localStorage on web; session validation on startup clears cache on expiry

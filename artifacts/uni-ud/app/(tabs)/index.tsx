@@ -8,6 +8,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -44,6 +45,13 @@ function AvatarCircle({ name, photo, size = 52 }: { name: string; photo?: string
     .map((w) => w[0])
     .join("")
     .toUpperCase();
+  if (photo) {
+    return (
+      <View style={{ width: size, height: size, borderRadius: size / 2, overflow: "hidden", borderWidth: 2, borderColor: "rgba(255,255,255,0.3)" }}>
+        <Image source={{ uri: photo }} style={{ width: size, height: size }} resizeMode="cover" />
+      </View>
+    );
+  }
   return (
     <LinearGradient
       colors={["#00D4FF", "#1A6FE8"]}
@@ -99,7 +107,7 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { node, documents } = useIdentity();
+  const { node, documents, avatarUri } = useIdentity();
   const { t } = useLanguage();
 
   const [empresaExpanded, setEmpresaExpanded] = useState(false);
@@ -125,7 +133,7 @@ export default function HomeScreen() {
       : "Pro";
 
   const identityGlobalId = node?.globalId ?? `did:uniid:${node?.id ?? "unknown"}`;
-  const identityQRData = `https://uni.id/u/${identityGlobalId}`;
+  const identityQRData = `https://expressjs-production-8bfc.up.railway.app/api/identity/${identityGlobalId}`;
 
   const callEmergency = () => {
     setShowSOS(false);
@@ -213,7 +221,7 @@ export default function HomeScreen() {
               onPress={() => router.push("/(tabs)/profile")}
               style={styles.idProfile}
             >
-              <AvatarCircle name={node?.name ?? "U"} size={56} />
+              <AvatarCircle name={node?.name ?? "U"} photo={avatarUri ?? undefined} size={56} />
               <View style={{ flex: 1, marginLeft: 14 }}>
                 <Text style={styles.idName} numberOfLines={1}>{node?.name ?? "Mi Identidad"}</Text>
                 <Text style={styles.idMeta} numberOfLines={1}>

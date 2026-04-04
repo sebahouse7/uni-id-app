@@ -206,7 +206,7 @@ export default function DocumentsScreen() {
               >
                 <Feather
                   name={item.icon as any}
-                  size={12}
+                  size={14}
                   color={isActive ? "#fff" : colors.textSecondary}
                 />
                 <Text
@@ -330,17 +330,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  catList: { paddingHorizontal: Spacing.md, gap: 8, marginBottom: 14, paddingRight: Spacing.md },
+  catList: { paddingHorizontal: Spacing.md, gap: 10, marginBottom: 14, paddingRight: Spacing.md },
   catChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderRadius: Radii.pill,
     borderWidth: 1,
   },
-  catChipText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  catChipText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   chipCount: {
     minWidth: 18,
     height: 18,

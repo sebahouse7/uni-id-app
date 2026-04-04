@@ -4,8 +4,10 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
   useColorScheme,
@@ -14,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { Radii, Shadows, Spacing } from "@/constants/design";
+import { useAuth } from "@/context/AuthContext";
 import { useIdentity } from "@/context/IdentityContext";
 import { apiGetAuditLogs } from "@/lib/apiClient";
 
@@ -149,6 +152,8 @@ export default function SecurityScreen() {
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
   const { documents, digitalIdentity } = useIdentity();
+  const { hasBiometrics, biometricsEnabled, enableBiometrics, disableBiometrics } = useAuth();
+  const [togglingBio, setTogglingBio] = useState(false);
   const [threatLevel] = useState(12);
   const [auditEvents, setAuditEvents] = useState<SecurityEvent[]>([]);
 
@@ -205,6 +210,99 @@ export default function SecurityScreen() {
         >
           <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
           <Text style={[styles.statusText, { color: colors.success }]}>Activo</Text>
+        </View>
+      </View>
+
+      {/* Access Control — biometric toggle */}
+      <View style={{ paddingHorizontal: Spacing.md }}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Control de acceso</Text>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.backgroundCard, borderColor: colors.border },
+            Shadows.sm,
+          ]}
+        >
+          {/* Biometric toggle row */}
+          <Pressable
+            onPress={async () => {
+              if (!hasBiometrics) return;
+              setTogglingBio(true);
+              try {
+                if (biometricsEnabled) {
+                  await disableBiometrics();
+                } else {
+                  await enableBiometrics();
+                }
+              } finally {
+                setTogglingBio(false);
+              }
+            }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 14 }}
+          >
+            <View
+              style={[
+                styles.cardIconWrap,
+                { backgroundColor: hasBiometrics ? "#1A6FE818" : colors.border + "40" },
+              ]}
+            >
+              <Feather
+                name="activity"
+                size={16}
+                color={hasBiometrics ? colors.tint : colors.textSecondary}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, { color: colors.text, fontSize: 14 }]}>
+                Desbloqueo biométrico
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_400Regular" }}>
+                {!hasBiometrics
+                  ? "No disponible en este dispositivo"
+                  : biometricsEnabled
+                  ? "Huella / Face ID activos"
+                  : "Deshabilitado — solo PIN"}
+              </Text>
+            </View>
+            <Switch
+              value={biometricsEnabled && hasBiometrics}
+              onValueChange={async (v) => {
+                if (!hasBiometrics) return;
+                setTogglingBio(true);
+                try {
+                  if (v) await enableBiometrics();
+                  else await disableBiometrics();
+                } finally {
+                  setTogglingBio(false);
+                }
+              }}
+              disabled={!hasBiometrics || togglingBio}
+              trackColor={{ false: colors.border, true: colors.tint + "70" }}
+              thumbColor={biometricsEnabled && hasBiometrics ? colors.tint : colors.textSecondary}
+            />
+          </Pressable>
+
+          <View style={[styles.separator, { backgroundColor: colors.border, marginVertical: 4 }]} />
+
+          {/* PIN protection row */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            <View style={[styles.cardIconWrap, { backgroundColor: colors.success + "18" }]}>
+              <Feather name="lock" size={16} color={colors.success} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, { color: colors.text, fontSize: 14 }]}>
+                Protección por PIN
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_400Regular" }}>
+                Siempre activo · Cambialo en Perfil
+              </Text>
+            </View>
+            <View style={[{ backgroundColor: colors.success + "18", paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radii.pill }]}>
+              <Text style={{ color: colors.success, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
+                Activo
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 

@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   apiRegister,
   apiCheckSession,
@@ -83,6 +84,7 @@ export interface CognitiveNetwork {
 const CACHE_KEY_NODE = "uniud_cache_node";
 const CACHE_KEY_DOCS = "uniud_cache_docs";
 const DEVICE_ID_KEY = "uniud_device_id";
+const AVATAR_URI_KEY = "uniud_avatar_uri_v1";
 
 function generateDeviceId(): string {
   const part1 = Date.now().toString(36);
@@ -118,6 +120,8 @@ interface IdentityContextType {
   isSyncing: boolean;
   isOnline: boolean;
   digitalIdentity: DigitalIdentity | null;
+  avatarUri: string | null;
+  setAvatarUri: (uri: string | null) => Promise<void>;
   createNode: (data: Omit<IdentityNode, "id" | "createdAt">) => Promise<void>;
   updateNode: (data: Partial<IdentityNode>) => Promise<void>;
   addDocument: (doc: Omit<Document, "id" | "createdAt" | "updatedAt">) => Promise<void>;
@@ -136,6 +140,7 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [avatarUri, setAvatarUriState] = useState<string | null>(null);
   const syncRef = useRef(false);
 
   const digitalIdentity: DigitalIdentity | null = node
@@ -175,14 +180,16 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [rawNode, rawDocs, dId] = await Promise.all([
+        const [rawNode, rawDocs, dId, savedAvatar] = await Promise.all([
           secureGet(CACHE_KEY_NODE).catch(() => null),
           secureGet(CACHE_KEY_DOCS).catch(() => null),
           getOrCreateDeviceId().catch(() => null),
+          AsyncStorage.getItem(AVATAR_URI_KEY).catch(() => null),
         ]);
         if (rawNode) setNode(JSON.parse(rawNode));
         if (rawDocs) setDocuments(JSON.parse(rawDocs));
         if (dId) setDeviceId(dId);
+        if (savedAvatar) setAvatarUriState(savedAvatar);
       } catch {
         // ignore cache errors
       } finally {
@@ -192,6 +199,15 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
       // After local load, try to sync with backend
       await syncWithBackend();
     })();
+  }, []);
+
+  const setAvatarUri = useCallback(async (uri: string | null) => {
+    setAvatarUriState(uri);
+    if (uri) {
+      await AsyncStorage.setItem(AVATAR_URI_KEY, uri).catch(() => {});
+    } else {
+      await AsyncStorage.removeItem(AVATAR_URI_KEY).catch(() => {});
+    }
   }, []);
 
   const cacheNode = async (n: IdentityNode) => {
@@ -361,6 +377,8 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
         isSyncing,
         isOnline,
         digitalIdentity,
+        avatarUri,
+        setAvatarUri,
         createNode,
         updateNode,
         addDocument,

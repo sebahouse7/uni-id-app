@@ -31,7 +31,7 @@ export default function ProfileScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { node, documents, updateNode } = useIdentity();
+  const { node, documents, updateNode, avatarUri, setAvatarUri } = useIdentity();
   const { t, lang, setLang } = useLanguage();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(node?.name ?? "");
@@ -39,7 +39,6 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [sessions, setSessions] = useState<any[]>([]);
   const [revokingAll, setRevokingAll] = useState(false);
-  const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [showPINChange, setShowPINChange] = useState(false);
   const [pinOld, setPinOld] = useState("");
   const [pinNew, setPinNew] = useState("");
@@ -64,7 +63,7 @@ export default function ProfileScreen() {
         quality: 0.8,
       });
       if (!result.canceled && result.assets[0]) {
-        setAvatarUri(result.assets[0].uri);
+        await setAvatarUri(result.assets[0].uri);
       }
     } catch {
       Alert.alert("Error", "No se pudo acceder a la galería.");
