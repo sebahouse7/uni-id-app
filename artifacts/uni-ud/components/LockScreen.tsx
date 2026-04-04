@@ -2,12 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Image,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 
 const LOGO = require("../assets/images/logo-uniid.png");
-const PIN_LENGTH = 4;
+const PIN_LENGTH = 6;
 
 function Countdown({ lockedUntil, onExpire }: { lockedUntil: number; onExpire: () => void }) {
   const [seconds, setSeconds] = useState(Math.ceil((lockedUntil - Date.now()) / 1000));
@@ -144,6 +146,26 @@ export function LockScreen() {
   const handleDelete = () => {
     setInputPin((p) => p.slice(0, -1));
     setError("");
+  };
+
+  const handleForgotPin = () => {
+    Alert.alert(
+      "Restablecer PIN",
+      "Vas a crear un PIN nuevo. ¿Continuás?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Crear nuevo PIN",
+          onPress: () => {
+            setInputPin("");
+            setConfirmPin("");
+            setStep("enter");
+            setError("");
+            setMode("setpin");
+          },
+        },
+      ]
+    );
   };
 
   const digits = [
@@ -293,13 +315,25 @@ export function LockScreen() {
 
           {/* Forgot PIN / switch to bio */}
           <View style={styles.footerRow}>
-            <Pressable onPress={() => setMode("setpin")} style={{ paddingVertical: 6 }}>
-              <Text style={styles.altLink}>¿Olvidaste tu PIN?</Text>
-            </Pressable>
+            {mode === "pin" && (
+              <TouchableOpacity
+                onPress={handleForgotPin}
+                activeOpacity={0.6}
+                style={styles.footerBtn}
+                hitSlop={{ top: 16, bottom: 16, left: 20, right: 20 }}
+              >
+                <Text style={styles.altLink}>¿Olvidaste tu PIN?</Text>
+              </TouchableOpacity>
+            )}
             {canUseBiometrics && (
-              <Pressable onPress={() => setMode("bio")} style={{ paddingVertical: 6 }}>
+              <TouchableOpacity
+                onPress={() => setMode("bio")}
+                activeOpacity={0.6}
+                style={styles.footerBtn}
+                hitSlop={{ top: 16, bottom: 16, left: 20, right: 20 }}
+              >
                 <Text style={styles.altLink}>Usar huella</Text>
-              </Pressable>
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -501,5 +535,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 24,
     marginTop: 8,
+  },
+  footerBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
 });
