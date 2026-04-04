@@ -1,9 +1,8 @@
 [build]
-builder = "nixpacks"
-buildCommand = "npm install --omit=dev"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node dist/index.mjs"
 healthcheckPath = "/api/healthz"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
