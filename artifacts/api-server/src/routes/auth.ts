@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { randomUUID } from "crypto";
 import { body, validationResult } from "express-validator";
 import { query, queryOne } from "../lib/db";
 import { signAccessToken, signRefreshToken, rotateRefreshToken, revokeAllUserTokens } from "../lib/jwt";
@@ -47,18 +48,19 @@ router.post(
 
     try {
       const hashedDevice = hashDeviceId(deviceId);
-      let user = await queryOne<{ id: string; name: string; network_plan: string }>(
-        `SELECT id, name, network_plan FROM uni_users WHERE device_id = $1`,
+      let user = await queryOne<{ id: string; name: string; network_plan: string; global_id: string | null }>(
+        `SELECT id, name, network_plan, global_id FROM uni_users WHERE device_id = $1`,
         [hashedDevice]
       );
 
       let isNew = false;
       if (!user) {
-        const rows = await query<{ id: string; name: string; network_plan: string }>(
-          `INSERT INTO uni_users (device_id, name, bio, network_plan)
-           VALUES ($1, $2, $3, 'free')
-           RETURNING id, name, network_plan`,
-          [hashedDevice, name, bio ?? null]
+        const globalId = `did:uniid:${randomUUID()}`;
+        const rows = await query<{ id: string; name: string; network_plan: string; global_id: string }>(
+          `INSERT INTO uni_users (device_id, name, bio, network_plan, global_id)
+           VALUES ($1, $2, $3, 'free', $4)
+           RETURNING id, name, network_plan, global_id`,
+          [hashedDevice, name, bio ?? null, globalId]
         );
         user = rows[0];
         isNew = true;
@@ -127,7 +129,7 @@ router.post("/logout", requireAuth, async (req: Request, res: Response) => {
 // Get current user profile
 router.get("/me", requireAuth, async (req: Request, res: Response) => {
   const user = await queryOne(
-    `SELECT id, name, bio, network_plan, plan_expires_at, created_at FROM uni_users WHERE id = $1`,
+    `SELECT id, global_id, name, bio, network_plan, plan_expires_at, created_at FROM uni_users WHERE id = $1`,
     [req.user!.sub]
   );
   if (!user) { res.status(404).json({ error: "Usuario no encontrado" }); return; }

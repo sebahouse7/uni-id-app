@@ -124,7 +124,8 @@ export default function HomeScreen() {
       ? "Basic"
       : "Pro";
 
-  const identityQRData = `https://uni.id/u/${node?.id ?? "unknown"}`;
+  const identityGlobalId = node?.globalId ?? `did:uniid:${node?.id ?? "unknown"}`;
+  const identityQRData = `https://uni.id/u/${identityGlobalId}`;
 
   const callEmergency = () => {
     setShowSOS(false);
@@ -215,8 +216,12 @@ export default function HomeScreen() {
               <AvatarCircle name={node?.name ?? "U"} size={56} />
               <View style={{ flex: 1, marginLeft: 14 }}>
                 <Text style={styles.idName} numberOfLines={1}>{node?.name ?? "Mi Identidad"}</Text>
-                <Text style={styles.idMeta}>
-                  {node?.id ? `ID · ${node.id.slice(0, 8).toUpperCase()}` : "ID · ········"}
+                <Text style={styles.idMeta} numberOfLines={1}>
+                  {node?.globalId
+                    ? node.globalId.replace("did:uniid:", "did:uniid:").slice(0, 22) + "…"
+                    : node?.id
+                    ? `ID · ${node.id.slice(0, 8).toUpperCase()}`
+                    : "ID · ········"}
                 </Text>
                 <View style={styles.idVerifiedRow}>
                   <View style={styles.idPulse} />
@@ -454,8 +459,8 @@ export default function HomeScreen() {
               />
             </View>
             <Text style={[styles.qrName, { color: colors.text }]}>{node?.name ?? "Mi Identidad"}</Text>
-            <Text style={[styles.qrId, { color: colors.textSecondary }]}>
-              {node?.id ? node.id.slice(0, 16).toUpperCase() : "—"}
+            <Text style={[styles.qrId, { color: colors.textSecondary }]} numberOfLines={2}>
+              {node?.globalId ?? (node?.id ? `did:uniid:${node.id}` : "—")}
             </Text>
             <Text style={[styles.qrHint, { color: colors.textSecondary }]}>
               Mostrá este QR para compartir tu identidad digital, documentos o recibir pagos

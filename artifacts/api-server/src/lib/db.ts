@@ -5,6 +5,12 @@ const SCHEMA_SQL = `
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 CREATE TABLE IF NOT EXISTS public.uni_users (id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,device_id text NOT NULL UNIQUE,name text NOT NULL,bio text,network_plan text DEFAULT 'free'::text NOT NULL,plan_expires_at timestamp with time zone,recovery_email_enc text,recovery_email_hash text,key_version integer DEFAULT 1 NOT NULL,created_at timestamp with time zone DEFAULT now() NOT NULL,updated_at timestamp with time zone DEFAULT now() NOT NULL);
+ALTER TABLE public.uni_users ADD COLUMN IF NOT EXISTS global_id text;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_global_id ON public.uni_users (global_id) WHERE global_id IS NOT NULL;
+UPDATE public.uni_users SET global_id = 'did:uniid:' || gen_random_uuid()::text WHERE global_id IS NULL;
+CREATE TABLE IF NOT EXISTS public.identity_nodes (id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,user_id uuid NOT NULL REFERENCES public.uni_users(id) ON DELETE CASCADE,global_id text NOT NULL UNIQUE,public_key text,trust_level integer DEFAULT 0 NOT NULL,verified boolean DEFAULT false NOT NULL,metadata jsonb,created_at timestamp with time zone DEFAULT now() NOT NULL,updated_at timestamp with time zone DEFAULT now() NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_identity_nodes_user ON public.identity_nodes USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_identity_nodes_global_id ON public.identity_nodes USING btree (global_id);
 CREATE TABLE IF NOT EXISTS public.uni_user_keys (id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,user_id uuid NOT NULL UNIQUE REFERENCES public.uni_users(id) ON DELETE CASCADE,wrapped_dek text NOT NULL,key_version integer DEFAULT 1 NOT NULL,created_at timestamp with time zone DEFAULT now() NOT NULL,rotated_at timestamp with time zone);
 CREATE TABLE IF NOT EXISTS public.uni_documents (id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,user_id uuid NOT NULL REFERENCES public.uni_users(id) ON DELETE CASCADE,title text NOT NULL,category text NOT NULL,description_enc text,file_uri_enc text,file_name_enc text,tags text[],key_version integer DEFAULT 1 NOT NULL,created_at timestamp with time zone DEFAULT now() NOT NULL,updated_at timestamp with time zone DEFAULT now() NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_documents_user_id ON public.uni_documents USING btree (user_id);

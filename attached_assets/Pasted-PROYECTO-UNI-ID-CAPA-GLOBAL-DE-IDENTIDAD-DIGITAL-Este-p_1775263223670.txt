@@ -1,0 +1,204 @@
+PROYECTO: UNI.ID — CAPA GLOBAL DE IDENTIDAD DIGITAL
+
+Este proyecto deja de ser una app y pasa a ser una infraestructura de identidad digital escalable.
+Necesito que implementes esto en FASES, sin romper producción actual.
+
+---
+
+FASE 1 — ESTABILIDAD CRÍTICA (OBLIGATORIO)
+
+Corregir bugs actuales:
+
+1. Guardado infinito de documentos:
+
+- Detectar por qué queda en "Guardando..."
+- Confirmar respuesta del backend
+- Asegurar:
+  - response OK
+  - manejo de errores
+  - timeout
+  - feedback real al usuario
+
+2. Biometría incorrecta:
+
+- NO permitir acceso biométrico sin registro previo
+- Implementar flujo real:
+  - usuario activa biometría
+  - se guarda flag seguro (SecureStore / Keychain)
+  - validar contra sistema del dispositivo
+
+3. PIN inválido:
+
+- No debe existir PIN por defecto
+- Crear flujo:
+  - set PIN inicial
+  - confirmación
+  - almacenamiento seguro
+- Validación real en backend o secure storage
+
+---
+
+FASE 2 — SISTEMA DE PAGOS REAL (CRÍTICO)
+
+El sistema actual es falso/incompleto. Necesito implementación real con MercadoPago.
+
+BACKEND:
+
+- Crear endpoint:
+  POST /create-subscription
+- Usar MP_ACCESS_TOKEN desde variables de Railway
+- Crear preferencia de pago con:
+  - título
+  - precio
+  - currency ARS
+  - payer email
+  - external_reference (user_id)
+
+FRONTEND:
+
+- Al hacer click en "Suscribirse":
+  - llamar backend
+  - recibir init_point
+  - REDIRECCIONAR a MercadoPago (no simulado)
+
+POST-PAGO:
+
+- Implementar webhook:
+  POST /webhook/mercadopago
+- Validar pago aprobado
+- Actualizar usuario:
+  - plan: premium
+  - status: active
+
+SEGURIDAD:
+
+- NO permitir acceso premium sin pago validado
+- Validar estado contra backend SIEMPRE
+
+---
+
+FASE 3 — IDENTIDAD GLOBAL (CORE DEL SISTEMA)
+
+Actualmente el ID es local. Necesito identidad global real.
+
+Implementar:
+
+1. Generación de ID:
+
+- Usar UUID v7 o v4 seguro
+- Crear campo:
+  global_id
+
+2. Formato:
+
+- did:uniid:<uuid>
+
+3. Separar:
+
+- id (interno DB)
+- global_id (identidad pública global)
+
+4. Validación:
+
+- Unicidad absoluta
+- No reutilizable
+
+---
+
+FASE 4 — BASE DE RED DE IDENTIDAD
+
+Crear nueva tabla:
+
+identity_nodes:
+
+- id
+- global_id
+- public_key (opcional)
+- created_at
+
+Preparar sistema para:
+
+- Relaciones entre usuarios (trust graph)
+- Credenciales verificables
+- Firma digital futura
+
+NO implementar todo aún, solo estructura base.
+
+---
+
+FASE 5 — SEGURIDAD REAL
+
+Implementar:
+
+- JWT bien configurado
+
+- expiración
+
+- refresh tokens
+
+- Rate limiting
+
+- Protección endpoints críticos
+
+- Validación backend en TODAS las operaciones
+
+---
+
+FASE 6 — FRONTEND REAL (UX)
+
+1. Pantalla principal:
+
+- Mostrar TODOS los documentos reales del usuario
+- No placeholders
+
+2. Estados:
+
+- loading
+- error
+- success
+
+3. Icono app:
+
+- Reemplazar por logo uni.id provisto
+- Sin fondo de teléfono
+- Icono real de producción
+
+---
+
+FASE 7 — PREPARACIÓN ESCALA GLOBAL
+
+Preparar arquitectura para:
+
+- Multi-país
+- Multi-moneda
+- Multi-idioma
+
+Diseñar estructura para:
+
+- Bancos
+- Gobiernos
+- Hospitales
+- Empresas
+
+(No implementar integraciones aún, solo diseño escalable)
+
+---
+
+FASE 8 — RESPUESTA FINAL (OBLIGATORIO)
+
+Al terminar, confirmar:
+
+1. ¿Cada usuario tiene un ID global único real?
+2. ¿El sistema de pagos funciona con validación real?
+3. ¿La app ya no depende de estados falsos o simulados?
+4. ¿Está lista para escalar a red de identidad?
+
+---
+
+IMPORTANTE:
+
+- No romper producción
+- Implementar por fases
+- Confirmar cada fase antes de avanzar
+
+Este sistema es crítico y debe ser tratado como infraestructura real.

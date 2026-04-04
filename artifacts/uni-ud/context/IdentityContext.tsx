@@ -43,6 +43,7 @@ export interface Document {
 
 export interface IdentityNode {
   id: string;
+  globalId?: string;
   name: string;
   avatar?: string;
   bio?: string;
@@ -227,6 +228,7 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
 
       const backendNode: IdentityNode = {
         id: session.user.id,
+        globalId: session.user.global_id ?? undefined,
         name: session.user.name,
         bio: session.user.bio,
         createdAt: session.user.created_at,
@@ -286,21 +288,7 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
   }, [node, isOnline]);
 
   const addDocument = useCallback(async (doc: Omit<Document, "id" | "createdAt" | "updatedAt">) => {
-    if (isOnline) {
-      const created = await apiCreateDocument(doc);
-      const newDoc: Document = {
-        id: created.id,
-        title: created.title,
-        category: created.category,
-        description: created.description ?? undefined,
-        fileUri: created.fileUri ?? undefined,
-        fileName: created.fileName ?? undefined,
-        createdAt: created.createdAt,
-        updatedAt: created.updatedAt,
-        tags: created.tags ?? [],
-      };
-      await cacheDocs([newDoc, ...documents]);
-    } else {
+    const saveLocally = async () => {
       const tempDoc: Document = {
         id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         createdAt: new Date().toISOString(),
@@ -308,6 +296,37 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
         ...doc,
       };
       await cacheDocs([tempDoc, ...documents]);
+    };
+
+    if (isOnline) {
+      // 12-second timeout for backend save — fall back to local if it takes too long
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Tiempo agotado — documento guardado localmente.")), 12000)
+      );
+      try {
+        const created = await Promise.race([apiCreateDocument(doc), timeoutPromise]);
+        const newDoc: Document = {
+          id: created.id,
+          title: created.title,
+          category: created.category,
+          description: created.description ?? undefined,
+          fileUri: created.fileUri ?? undefined,
+          fileName: created.fileName ?? undefined,
+          createdAt: created.createdAt,
+          updatedAt: created.updatedAt,
+          tags: created.tags ?? [],
+        };
+        await cacheDocs([newDoc, ...documents]);
+      } catch (err: any) {
+        // Network error or timeout — save locally so user doesn't lose work
+        await saveLocally();
+        if (err.message?.includes("agotado")) {
+          throw new Error("Sin conexión estable. El documento se guardó en tu dispositivo y se sincronizará cuando vuelvas a estar online.");
+        }
+        throw err;
+      }
+    } else {
+      await saveLocally();
     }
   }, [documents, isOnline]);
 

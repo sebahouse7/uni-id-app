@@ -35,10 +35,11 @@ export function LockScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme !== "light";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { unlock, hasBiometrics, hasPin, verifyPin, setPin, failedAttempts, lockedUntil, successState } = useAuth();
+  const { unlock, hasBiometrics, biometricsEnabled, hasPin, verifyPin, setPin, failedAttempts, lockedUntil, successState } = useAuth();
 
+  const canUseBiometrics = hasBiometrics && biometricsEnabled;
   const [mode, setMode] = useState<"bio" | "pin" | "setpin">(
-    hasBiometrics ? "bio" : hasPin ? "pin" : "setpin"
+    canUseBiometrics ? "bio" : hasPin ? "pin" : "setpin"
   );
   const [pin, setInputPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
@@ -48,11 +49,11 @@ export function LockScreen() {
   const bioAutoTriggeredRef = useRef(false);
 
   useEffect(() => {
-    if (mode === "bio" && !bioAutoTriggeredRef.current && !isLocked) {
+    if (mode === "bio" && canUseBiometrics && !bioAutoTriggeredRef.current && !isLocked) {
       bioAutoTriggeredRef.current = true;
       unlock();
     }
-  }, [mode]);
+  }, [mode, canUseBiometrics]);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;

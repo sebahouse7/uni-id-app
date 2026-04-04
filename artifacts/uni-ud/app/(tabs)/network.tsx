@@ -27,6 +27,7 @@ import {
   detectPaymentRegion,
   openPaymentBrowser,
 } from "@/lib/payments";
+import { apiGetSubscriptionStatus } from "@/lib/apiClient";
 
 const ECOSYSTEMS = [
   { icon: "briefcase", labelKey: "banks", descKey: "banksDesc", color: "#1A6FE8" },
@@ -83,11 +84,31 @@ export default function NetworkScreen() {
       if (status === "cancelled") {
         Alert.alert("Pago cancelado", "Podés intentarlo de nuevo cuando quieras.");
       } else {
-        await updateNode({ networkPlan: planId });
-        Alert.alert(
-          t.planActivated,
-          `${t.planActivatedDesc} ${planId === "basic" ? t.planBasic : t.planPro}.`
-        );
+        // Poll backend for real subscription status — never trust client-side
+        let attempts = 0;
+        let activated = false;
+        while (attempts < 6 && !activated) {
+          await new Promise((r) => setTimeout(r, 2500));
+          try {
+            const sub = await apiGetSubscriptionStatus();
+            const activePlan = sub?.current?.plan;
+            if (activePlan && activePlan !== "free" && sub?.current?.isActive) {
+              await updateNode({ networkPlan: activePlan as "basic" | "pro" });
+              Alert.alert(
+                t.planActivated,
+                `${t.planActivatedDesc} ${activePlan === "basic" ? t.planBasic ?? "Básico" : t.planPro ?? "Pro"}.`
+              );
+              activated = true;
+            }
+          } catch {}
+          attempts++;
+        }
+        if (!activated) {
+          Alert.alert(
+            "Pago en procesamiento",
+            "Tu pago está siendo verificado. El plan se activará en unos minutos. Podés cerrar y volver a abrir la app."
+          );
+        }
       }
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Error al procesar el pago");

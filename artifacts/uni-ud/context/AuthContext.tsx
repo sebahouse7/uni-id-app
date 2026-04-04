@@ -20,6 +20,7 @@ import {
 const LOCK_TIMEOUT_MS = 3 * 60 * 1000;
 const FAIL_COUNT_KEY = "uni_id_pin_fails_v1";
 const LOCKED_UNTIL_KEY = "uni_id_pin_locked_until_v1";
+const BIOMETRICS_ENABLED_KEY = "uni_id_biometrics_enabled_v1";
 const MAX_FAILS = 5;
 const LOCKOUT_DURATION_MS = 30 * 1000;
 
@@ -28,6 +29,7 @@ interface AuthContextType {
   isLocked: boolean;
   isAuthenticated: boolean;
   hasBiometrics: boolean;
+  biometricsEnabled: boolean;
   hasPin: boolean;
   failedAttempts: number;
   lockedUntil: number | null;
@@ -36,6 +38,8 @@ interface AuthContextType {
   verifyPin: (pin: string) => Promise<boolean>;
   lock: () => void;
   successState: boolean;
+  enableBiometrics: () => Promise<void>;
+  disableBiometrics: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -43,6 +47,7 @@ const AuthContext = createContext<AuthContextType>({
   isLocked: false,
   isAuthenticated: false,
   hasBiometrics: false,
+  biometricsEnabled: false,
   hasPin: false,
   failedAttempts: 0,
   lockedUntil: null,
@@ -51,12 +56,15 @@ const AuthContext = createContext<AuthContextType>({
   verifyPin: async () => false,
   lock: () => {},
   successState: false,
+  enableBiometrics: async () => {},
+  disableBiometrics: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasBiometrics, setHasBiometrics] = useState(false);
+  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
   const [hasPin, setHasPin] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
@@ -90,6 +98,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const biometricsAvailable = compatible && enrolled;
       setHasBiometrics(biometricsAvailable);
 
+      // Only use biometrics if user explicitly enabled them in the app
+      const bioEnabledStr = await secureGet(BIOMETRICS_ENABLED_KEY).catch(() => null);
+      const bioEnabled = bioEnabledStr === "true" && biometricsAvailable;
+      setBiometricsEnabled(bioEnabled);
+
       const storedPin = await getPin();
       setHasPin(!!storedPin);
 
@@ -111,7 +124,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch {}
 
-      if (biometricsAvailable) {
+      // Only attempt biometric if user explicitly enabled it
+      if (bioEnabled) {
         const success = await attemptBiometric();
         if (!success) {
           setIsLocked(true);
@@ -124,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // No PIN and no biometrics enabled — first-time user, lock so they can create a PIN
       setIsLocked(true);
     } catch {
       setIsAuthenticated(true);
@@ -247,6 +262,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSuccessState(false);
   }, []);
 
+  const enableBiometrics = useCallback(async () => {
+    await secureSet(BIOMETRICS_ENABLED_KEY, "true");
+    setBiometricsEnabled(true);
+  }, []);
+
+  const disableBiometrics = useCallback(async () => {
+    await secureDelete(BIOMETRICS_ENABLED_KEY);
+    setBiometricsEnabled(false);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -254,6 +279,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLocked,
         isAuthenticated,
         hasBiometrics,
+        biometricsEnabled,
         hasPin,
         failedAttempts,
         lockedUntil,
@@ -262,6 +288,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         verifyPin,
         lock,
         successState,
+        enableBiometrics,
+        disableBiometrics,
       }}
     >
       {children}

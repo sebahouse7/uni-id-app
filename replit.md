@@ -22,12 +22,14 @@ Mobile identity wallet app built with Expo React Native.
 - `app/onboarding.tsx` — Gradient slide icons, animated scale transitions, trust badge
 - `components/LockScreen.tsx` — Gradient logo icon, premium keypad UI, auto-trigger bio on mount
 
-### Security (FASE 1 — Complete)
+### Security (FASE 1 + 5 — Complete)
 - **PIN hashing**: SHA-256 via expo-crypto, salt: `uni.id::secure::pin::v1::2024` — stored as hash, never plaintext
 - **Biometric**: `disableDeviceFallback: true` on Android (only real fingerprint/face, no device PIN as fallback)
 - **Double execution guard**: `biometricInProgressRef` + `initDoneRef` prevent double bio prompts
-- **LockScreen fallback**: bio→PIN/setpin depending on whether PIN exists; auto-triggers bio on mount
-- **PIN key**: `uni_id_pin_v1` (never changed)
+- **LockScreen fallback**: `canUseBiometrics = hasBiometrics && biometricsEnabled` — bio only if user explicitly opted in; then PIN; then set PIN if none
+- **PIN key**: `uni_id_pin_v1`; biometrics key: `uni_id_biometrics_enabled_v1` (must be string `"true"` to activate)
+- **JWT refresh tokens + rate limiting**: authLimiter (20/15min), strictAuthLimiter (8/15min), generalLimiter in place
+- **changePIN / checkPINSet**: added to authService.ts; PIN change modal in security tab
 
 ### Documents (FASE 2 — Complete)
 - **Loading infinito fixed**: `handleSave` in `add-document.tsx` wrapped in try/catch/finally
