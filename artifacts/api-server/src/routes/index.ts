@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import type { Request, Response } from "express";
 import healthRouter from "./health";
 import authRouter from "./auth";
 import documentsRouter from "./documents";
@@ -11,6 +12,7 @@ import shareRouter from "./share";
 import businessRouter from "./business";
 import identityRouter from "./identity";
 import { generalLimiter } from "../middlewares/rateLimit";
+import { queryOne } from "../lib/db";
 
 const router: IRouter = Router();
 
@@ -27,5 +29,61 @@ router.use("/backup", backupRouter);
 router.use("/share", shareRouter);
 router.use("/businesses", businessRouter);
 router.use("/identity", identityRouter);
+
+// ─── GET /verify/:id — verificación pública de identidad (sin auth) ───────────
+// Acepta: did:uniid:<uuid>, short ID (#ABC123456 o ABC123456)
+router.get("/verify/:id", async (req: Request, res: Response) => {
+  const rawId = decodeURIComponent(String(req.params["id"] ?? "")).trim();
+  if (!rawId) {
+    res.status(400).json({ error: "ID requerido" });
+    return;
+  }
+
+  let user: any = null;
+
+  if (rawId.startsWith("did:uniid:")) {
+    user = await queryOne(
+      `SELECT id, name, bio, global_id, created_at, network_plan, plan_expires_at
+       FROM uni_users WHERE global_id = $1`,
+      [rawId]
+    );
+  } else {
+    const clean = rawId.replace(/^#/, "").toUpperCase().slice(0, 9);
+    user = await queryOne(
+      `SELECT id, name, bio, global_id, created_at, network_plan, plan_expires_at
+       FROM uni_users
+       WHERE UPPER(REPLACE(REPLACE(global_id, 'did:uniid:', ''), '-', '')) LIKE $1 || '%'
+       LIMIT 1`,
+      [clean]
+    );
+  }
+
+  if (!user) {
+    res.status(404).json({ error: "Identidad no encontrada en la red uni.id" });
+    return;
+  }
+
+  const isPro = user.network_plan !== "free";
+  const shortId = user.global_id
+    ? `#${user.global_id.replace("did:uniid:", "").replace(/-/g, "").slice(0, 9).toUpperCase()}`
+    : null;
+
+  res.json({
+    globalId: user.global_id,
+    shortId,
+    name: user.name,
+    bio: isPro ? (user.bio ?? undefined) : undefined,
+    status: "verified",
+    verificationLevel: isPro ? 80 : 40,
+    networkPlan: user.network_plan,
+    planActive: isPro,
+    network: "uni.id Global Identity Network",
+    issuer: "human.id labs S.A.S.",
+    memberSince: user.created_at,
+    allowedData: isPro
+      ? ["name", "globalId", "shortId", "bio", "networkPlan", "memberSince"]
+      : ["name", "globalId", "shortId"],
+  });
+});
 
 export default router;

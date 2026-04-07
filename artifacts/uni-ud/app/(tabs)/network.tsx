@@ -21,10 +21,7 @@ import { NETWORK_PLANS, useIdentity } from "@/context/IdentityContext";
 import { useLanguage } from "@/context/LanguageContext";
 import {
   PlanId,
-  checkPaymentConfig,
   createMercadoPagoCheckout,
-  createStripeCheckout,
-  detectPaymentRegion,
   openPaymentBrowser,
 } from "@/lib/payments";
 import { apiGetSubscriptionStatus } from "@/lib/apiClient";
@@ -46,15 +43,6 @@ export default function NetworkScreen() {
   const { node, updateNode } = useIdentity();
   const { t } = useLanguage();
   const [purchasing, setPurchasing] = useState<string | null>(null);
-  const [paymentConfig, setPaymentConfig] = useState<{ mercadopago: boolean; stripe: boolean }>({
-    mercadopago: false,
-    stripe: false,
-  });
-  const region = detectPaymentRegion();
-
-  useEffect(() => {
-    checkPaymentConfig().then(setPaymentConfig);
-  }, []);
 
   const handlePurchase = async (planId: PlanId) => {
     if (!node) return;
@@ -63,10 +51,7 @@ export default function NetworkScreen() {
     }
     setPurchasing(planId);
     try {
-      // Always try real payment — LATAM uses MercadoPago, rest uses Stripe
-      const result = region === "latam"
-        ? await createMercadoPagoCheckout(planId, node.id)
-        : await createStripeCheckout(planId, node.id);
+      const result = await createMercadoPagoCheckout(planId, node.id);
 
       if (!result.url) {
         Alert.alert(
@@ -115,7 +100,6 @@ export default function NetworkScreen() {
   };
 
   const connectionCount = 147382;
-  const paymentProvider = region === "latam" ? "MercadoPago" : "Stripe";
 
   return (
     <ScrollView
@@ -263,7 +247,7 @@ export default function NetworkScreen() {
           <Text style={[styles.providerText, { color: colors.textSecondary }]}>
             Pagos procesados por{" "}
             <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>
-              {paymentProvider}
+              Mercado Pago
             </Text>{" "}
             — 100% seguro
           </Text>

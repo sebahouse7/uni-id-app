@@ -85,10 +85,35 @@ Mobile identity wallet app built with Expo React Native.
 - `lib/apiClient.ts` — tokens in localStorage (web) / SecureStore (native)
 - `context/IdentityContext.tsx` — device ID persisted in localStorage on web; session validation on startup clears cache on expiry
 
-### Payments (FIXED)
-- `lib/payments.ts` — MercadoPago + Stripe checkout via authenticated API calls
-- Backend: full webhook handling for MP + Stripe (activate/reject/refund → email notification)
-- **CRITICAL BUG FIXED**: `network.tsx` no longer auto-activates PRO plan if `result.url` is null. Shows error "Pago no disponible" instead. PRO only activates via real backend webhook.
+### Payments (MercadoPago-only)
+- `lib/payments.ts` — MercadoPago-only (Stripe fully removed); single `createMercadoPagoCheckout()` function
+- Backend: MP webhook handling for activate/reject/refund → email notification
+- `network.tsx` hardcoded to "Mercado Pago" (no region detection, no Stripe)
+
+### Subscription Gating (PaywallGate)
+- `components/ui/PaywallGate.tsx` — Full and compact variants for paywall UI
+- `app/(tabs)/documents.tsx` — 3-doc limit for free users; banner + lock icon on + button
+- `app/add-document.tsx` — Shows PaywallGate when at limit (prevents bypass by direct navigation)
+- **Limit**: FREE_DOC_LIMIT = 3 documents; any plan (basic/pro) = unlimited
+- Gate redirects to `/(tabs)/network` to view plans and activate subscription
+
+### Public Identity + Verify Endpoint
+- `GET /api/identity/:globalId` — Enhanced with `shortId`, `verificationLevel`, `allowedData`
+- `GET /api/verify/:id` — NEW; accepts DID (`did:uniid:uuid`) or shortId; returns public identity
+  - 404 `{"error":"Identidad no encontrada en la red uni.id"}` for unknown IDs
+  - **LOCAL**: Working ✅ | **RAILWAY**: Still old code (see below)
+
+### GitHub Actions Workflows
+- `.github/workflows/build-android.yml` — Auto-builds signed APK on `artifacts/uni-ud/**` push
+- `.github/workflows/deploy-railway.yml` — Auto-deploys to Railway on `artifacts/api-server/**` push
+- **Railway TOKEN**: `RAILWAY_TOKEN` in GitHub secrets was a UUID placeholder. Fixed — now contains real Railway token
+- **Railway CLI issue**: Requires Railway personal API token (from dashboard: Account Settings → API Tokens)
+  - If `railway up` still fails, user must generate a new API token and update `RAILWAY_TOKEN` Replit secret
+
+### Railway Production Backend
+- URL: `https://expressjs-production-8bfc.up.railway.app/api`
+- **Status**: Running old code. New endpoints (`/verify/:id`, enhanced `/identity/:globalId`) NOT yet deployed
+- **Fix**: Update `RAILWAY_TOKEN` Replit secret with personal API token from railway.app dashboard
 
 ### Document Viewer (Enhanced)
 - `app/document/[id].tsx` — Added image preview (if fileUri is an image extension/data URI)

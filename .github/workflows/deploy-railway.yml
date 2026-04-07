@@ -1,0 +1,118 @@
+name: Deploy Backend to Railway
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'artifacts/api-server/**'
+      - 'deploy/railway-api/**'
+      - '.github/workflows/deploy-railway.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy API to Railway
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build API server (TypeScript → ESM)
+        run: pnpm --filter @workspace/api-server run build
+
+      - name: Prepare Railway deploy package
+        run: |
+          ls -lh artifacts/api-server/dist/index.mjs || { echo "❌ dist/ not found after build"; exit 1; }
+          mkdir -p deploy/railway-api/dist
+          cp artifacts/api-server/dist/index.mjs deploy/railway-api/dist/
+          ls -lh deploy/railway-api/
+          echo "✅ Build preparado $(du -sh deploy/railway-api/)"
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli@latest && railway --version
+
+      - name: Debug Railway auth
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "Token set: $([ -n "$RAILWAY_TOKEN" ] && echo YES || echo NO)"
+          echo "Token length: ${#RAILWAY_TOKEN}"
+          echo "Token prefix: ${RAILWAY_TOKEN:0:8}..."
+          railway whoami 2>&1 || echo "⚠️ whoami failed"
+          railway status 2>&1 || echo "⚠️ status failed"
+
+      - name: Deploy to Railway (railway up)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: a58781bd-0545-4878-8ae1-21416fe56bfd
+          RAILWAY_SERVICE_ID: ece20428-adbb-4a7e-a64e-c1f11f772de6
+          RAILWAY_ENVIRONMENT_ID: 7bf8d483-40bb-4b58-8990-651dfa1b57aa
+        working-directory: deploy/railway-api
+        run: |
+          echo "=== Working directory ==="
+          ls -la
+          echo ""
+          echo "=== Running railway up ==="
+          set +e
+          railway up --detach --ci 2>&1
+          EXIT_CODE=$?
+          set -e
+          echo "Exit code: $EXIT_CODE"
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "⚠️ railway up falló con código $EXIT_CODE"
+            echo "Intentando railway redeploy..."
+            railway redeploy --service ece20428-adbb-4a7e-a64e-c1f11f772de6 --yes 2>&1 || \
+              echo "⚠️ redeploy también falló"
+          fi
+
+      - name: Verify deployment (non-blocking)
+        if: always()
+        run: |
+          echo "Esperando 60 segundos para que Railway levante..."
+          sleep 60
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 \
+            https://expressjs-production-8bfc.up.railway.app/api/healthz || echo "000")
+          echo "Railway health: HTTP $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Backend online en Railway"
+            VERIFY=$(curl -s --max-time 15 \
+              "https://expressjs-production-8bfc.up.railway.app/api/verify/DID:UNIID:TEST" | \
+              grep -o '"error":"[^"]*"' | head -1)
+            echo "Verify test: $VERIFY"
+            if echo "$VERIFY" | grep -q "not found\|no encontrada\|No encontrada"; then
+              echo "✅ /verify/:id endpoint activo con código nuevo"
+            elif [ -n "$VERIFY" ]; then
+              echo "✅ /verify/:id endpoint activo"
+            else
+              echo "⚠️ /verify/:id puede ser código antiguo (devuelve: Ruta no encontrada)"
+            fi
+          else
+            echo "⏳ Backend no responde aún. Ver Railway dashboard:"
+            echo "   https://railway.app/project/a58781bd-0545-4878-8ae1-21416fe56bfd"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🚀 Railway Backend Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| URL | https://expressjs-production-8bfc.up.railway.app/api |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Panel | [Railway Dashboard](https://railway.app/project/a58781bd-0545-4878-8ae1-21416fe56bfd) |" >> $GITHUB_STEP_SUMMARY

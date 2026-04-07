@@ -152,7 +152,11 @@ export default function ProfileScreen() {
   const infoRows = [
     {
       label: "ID único",
-      value: node?.id?.slice(0, 16).toUpperCase() ?? "—",
+      value: node?.globalId
+        ? `#${node.globalId.replace("did:uniid:", "").replace(/-/g, "").slice(0, 9).toUpperCase()}`
+        : node?.id
+        ? `#${node.id.replace(/-/g, "").slice(0, 9).toUpperCase()}`
+        : "—",
       icon: "hash",
       color: "#1A6FE8",
     },

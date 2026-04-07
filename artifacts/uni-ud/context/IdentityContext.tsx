@@ -278,6 +278,7 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     const { user } = await apiRegister(deviceId, data.name, data.bio);
     const newNode: IdentityNode = {
       id: user.id,
+      globalId: user.global_id ?? undefined,
       name: user.name,
       bio: data.bio,
       createdAt: new Date().toISOString(),
@@ -285,7 +286,9 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     };
     await cacheNode(newNode);
     setIsOnline(true);
-  }, []);
+    // Sync from backend immediately to get full profile data
+    setTimeout(() => syncWithBackend(), 500);
+  }, [syncWithBackend]);
 
   const updateNode = useCallback(async (data: Partial<IdentityNode>) => {
     if (!node) return;
