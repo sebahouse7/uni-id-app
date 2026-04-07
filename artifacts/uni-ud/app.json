@@ -26,7 +26,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#060B18"
+        "backgroundColor": "#1A5F8A"
       },
       "package": "com.humanidhubs.uniid",
       "permissions": [
