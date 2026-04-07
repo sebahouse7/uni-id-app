@@ -6,6 +6,7 @@ on:
     paths:
       - 'artifacts/uni-ud/**'
       - '.github/workflows/build-android.yml'
+      - '.github/signing-keystore.b64'
   workflow_dispatch:
 
 jobs:
@@ -37,12 +38,8 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install dependencies
-        working-directory: artifacts/uni-ud
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Install root dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Install workspace dependencies (hoisted for Metro bundler)
+        run: pnpm install --no-frozen-lockfile --shamefully-hoist
 
       - name: Run Expo Prebuild
         working-directory: artifacts/uni-ud
@@ -52,20 +49,47 @@ jobs:
           EXPO_PUBLIC_API_URL: 'https://expressjs-production-8bfc.up.railway.app/api'
         run: npx expo prebuild --platform android --clean --no-install
 
-      - name: Build Debug APK
+      - name: Decode signing keystore
+        run: |
+          KEYSTORE_PATH="$GITHUB_WORKSPACE/artifacts/uni-ud/android/app/uniid-release.keystore"
+          base64 -d .github/signing-keystore.b64 > "$KEYSTORE_PATH"
+          echo "KEYSTORE_PATH=$KEYSTORE_PATH" >> $GITHUB_ENV
+          echo "Keystore: $(ls -lh $KEYSTORE_PATH | awk '{print $5}')"
+
+      - name: Build Release APK (signed)
         working-directory: artifacts/uni-ud/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon -Dfile.encoding=UTF-8
+          ./gradlew assembleRelease --no-daemon -Dfile.encoding=UTF-8 \
+            -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
+            -Pandroid.injected.signing.store.password="uniid2024release" \
+            -Pandroid.injected.signing.key.alias="uniid-key" \
+            -Pandroid.injected.signing.key.password="uniid2024release"
+          echo "Build OK — buscando APK..."
+          find "$GITHUB_WORKSPACE/artifacts/uni-ud/android/app/build/outputs" -name "*.apk" 2>/dev/null
 
-      - name: Rename APK with version and date
+      - name: Find and package APK
         run: |
           DATE=$(date +%Y%m%d)
+          BUILD_NUM=${{ github.run_number }}
           mkdir -p /tmp/apk-output
-          cp artifacts/uni-ud/android/app/build/outputs/apk/debug/app-debug.apk \
-             /tmp/apk-output/uni-id-v${{ github.run_number }}-${DATE}.apk
-          echo "APK_FILE=/tmp/apk-output/uni-id-v${{ github.run_number }}-${DATE}.apk" >> $GITHUB_ENV
-          echo "APK_NAME=uni-id-v${{ github.run_number }}-${DATE}.apk" >> $GITHUB_ENV
+
+          # Search broadly using absolute path
+          APK_SRC=$(find "$GITHUB_WORKSPACE/artifacts/uni-ud/android/app/build/outputs" -name "*.apk" 2>/dev/null | head -1)
+          echo "APK encontrado: $APK_SRC"
+
+          if [ -z "$APK_SRC" ]; then
+            echo "❌ No APK. Estructura de build:"
+            find "$GITHUB_WORKSPACE/artifacts/uni-ud/android/app/build" -type d 2>/dev/null | head -20
+            exit 1
+          fi
+
+          APK_NAME="uni-id-v${BUILD_NUM}-${DATE}.apk"
+          cp "$APK_SRC" "/tmp/apk-output/$APK_NAME"
+          SIZE=$(ls -lh "/tmp/apk-output/$APK_NAME" | awk '{print $5}')
+          echo "APK_FILE=/tmp/apk-output/$APK_NAME" >> $GITHUB_ENV
+          echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
+          echo "✅ APK: $APK_NAME ($SIZE)"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -74,8 +98,12 @@ jobs:
           path: ${{ env.APK_FILE }}
           retention-days: 30
 
-      - name: Show download info
+      - name: Build summary
         run: |
-          echo "✅ APK generado exitosamente"
-          echo "📱 Nombre: ${{ env.APK_NAME }}"
-          echo "📥 Descargalo desde: Actions → este workflow → Artifacts"
+          SIZE=$(ls -lh ${{ env.APK_FILE }} | awk '{print $5}')
+          echo "## ✅ uni.id APK compilado exitosamente" >> $GITHUB_STEP_SUMMARY
+          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Archivo | \`${{ env.APK_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tamaño | $SIZE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build # | ${{ github.run_number }} |" >> $GITHUB_STEP_SUMMARY
