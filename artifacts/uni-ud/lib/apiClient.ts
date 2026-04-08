@@ -281,7 +281,47 @@ export async function isLoggedIn(): Promise<boolean> {
   return !!token;
 }
 
-// ─── Share / Identidad compartida ─────────────────────────────────────────────
+// ─── Share / Compartición segura de identidad ─────────────────────────────────
+
+export async function apiShareCreateQr(opts: {
+  permissions?: { name?: boolean; globalId?: boolean; bio?: boolean; networkPlan?: boolean };
+  expiresInMinutes?: number;
+  label?: string;
+}): Promise<{ token: string; qrContent: string; expiresAt: string; expiresInMinutes: number }> {
+  const res = await authFetch("/share/create-qr", {
+    method: "POST",
+    body: JSON.stringify(opts),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Error al crear QR");
+  }
+  return res.json();
+}
+
+export async function apiShareGetPending(): Promise<any[]> {
+  const res = await authFetch("/share/pending");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function apiShareApprove(requestId: string): Promise<{ ok: boolean; data: any }> {
+  const res = await authFetch(`/share/approve/${requestId}`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Error al aprobar");
+  }
+  return res.json();
+}
+
+export async function apiShareReject(requestId: string): Promise<void> {
+  const res = await authFetch(`/share/reject/${requestId}`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Error al rechazar");
+  }
+}
+
 export async function apiShareHistory(): Promise<any[]> {
   const res = await authFetch("/share/history");
   if (!res.ok) return [];
@@ -290,39 +330,6 @@ export async function apiShareHistory(): Promise<any[]> {
 
 export async function apiShareRevoke(token: string): Promise<void> {
   await authFetch(`/share/${token}`, { method: "DELETE" });
-}
-
-export async function apiShareCreate(opts: {
-  documentIds: string[];
-  label?: string;
-  expiresInMinutes: number;
-  allowFileView?: boolean;
-}): Promise<{ token: string; url: string; expiresAt: string }> {
-  const res = await authFetch("/share/create", {
-    method: "POST",
-    body: JSON.stringify(opts),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? "Error al crear enlace");
-  }
-  return res.json();
-}
-
-export async function apiShareView(token: string): Promise<{
-  label: string | null;
-  owner: { name: string };
-  documents: any[];
-  expiresAt: string;
-  accessCount: number;
-  allowFileView: boolean;
-}> {
-  const res = await fetchWithRetry(`${BASE_URL}/share/${token}`, {});
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? "Enlace inválido o expirado");
-  }
-  return res.json();
 }
 
 // ─── Sesiones activas ──────────────────────────────────────────────────────────

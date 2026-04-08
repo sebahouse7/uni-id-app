@@ -203,6 +203,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_global_id ON public.uni_users (globa
 
 -- Assign a real did:uniid UUID to every existing user that doesn't have one
 UPDATE public.uni_users SET global_id = 'did:uniid:' || gen_random_uuid()::text WHERE global_id IS NULL OR global_id = '';
+
+-- Secure identity access requests table (new QR flow)
+CREATE TABLE IF NOT EXISTS public.uni_access_requests (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    share_token_id text NOT NULL REFERENCES public.uni_share_tokens(id) ON DELETE CASCADE,
+    owner_user_id uuid NOT NULL REFERENCES public.uni_users(id) ON DELETE CASCADE,
+    status text DEFAULT 'awaiting_scan' NOT NULL,
+    permissions jsonb DEFAULT '{}'::jsonb,
+    requester_ip text,
+    requester_device text,
+    response_data jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_access_requests_token ON public.uni_access_requests USING btree (share_token_id);
+CREATE INDEX IF NOT EXISTS idx_access_requests_owner ON public.uni_access_requests USING btree (owner_user_id, status);
 `;
 
 async function migrate() {

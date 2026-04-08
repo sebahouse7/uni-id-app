@@ -7,81 +7,324 @@ import { log } from "../lib/audit";
 const router = Router();
 
 function generateToken(): string {
-  return randomBytes(32).toString("hex");
+  return randomBytes(24).toString("hex");
 }
 
-// ─── POST /share/create — crear link compartido ───────────────────────────────
-router.post("/create", requireAuth, async (req: Request, res: Response) => {
+// ─── POST /share/create-qr — crear token de acceso seguro ────────────────────
+// El QR contiene SOLO: uniid://access?token=xxx
+// No contiene datos personales ni URLs públicas
+router.post("/create-qr", requireAuth, async (req: Request, res: Response) => {
   const userId = req.user!.sub;
-  const { documentIds, label, expiresInMinutes = 60 } = req.body as {
-    documentIds: string[];
-    label?: string;
+  const {
+    permissions = { name: true, globalId: true },
+    expiresInMinutes = 3,
+    label,
+  } = req.body as {
+    permissions?: { name?: boolean; globalId?: boolean; bio?: boolean; networkPlan?: boolean };
     expiresInMinutes?: number;
+    label?: string;
   };
 
-  const allowFileView = Boolean(req.body.allowFileView ?? false);
-
-  if (!Array.isArray(documentIds) || documentIds.length === 0) {
-    res.status(400).json({ error: "Seleccioná al menos un documento" });
-    return;
-  }
-
-  const mins = Number(expiresInMinutes);
-  if (!mins || mins < 1 || mins > 10080) {
-    res.status(400).json({ error: "Expiración inválida (1 min – 7 días)" });
-    return;
-  }
-
-  // Verificar que todos los documentos pertenecen al usuario
-  const owned = await query<{ id: string }>(
-    `SELECT id FROM uni_documents WHERE id = ANY($1) AND user_id = $2`,
-    [documentIds, userId]
-  );
-
-  if (owned.length !== documentIds.length) {
-    res.status(403).json({ error: "Algunos documentos no te pertenecen" });
-    return;
-  }
-
+  const mins = Math.min(Math.max(Number(expiresInMinutes) || 3, 1), 5);
   const token = generateToken();
   const expiresAt = new Date(Date.now() + mins * 60 * 1000);
 
   await query(
     `INSERT INTO uni_share_tokens (id, user_id, document_ids, label, expires_at, allow_file_view)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [token, userId, documentIds, label ?? null, expiresAt, allowFileView]
+     VALUES ($1, $2, $3, $4, $5, false)`,
+    [token, userId, [], label ?? null, expiresAt]
+  );
+
+  await query(
+    `INSERT INTO uni_access_requests (share_token_id, owner_user_id, permissions, status)
+     VALUES ($1, $2, $3, 'awaiting_scan')`,
+    [token, userId, JSON.stringify(permissions)]
   );
 
   await log({
     userId,
-    event: "share.created",
+    event: "share.qr_created",
     ip: req.ip,
-    metadata: { documentCount: documentIds.length, expiresInMinutes: mins },
+    metadata: { token: token.slice(0, 8) + "...", expiresInMinutes: mins, permissions },
   });
 
-  const baseUrl = process.env["API_BASE_URL"] ?? "";
   res.json({
     token,
-    url: `${baseUrl}/shared/${token}`,
+    qrContent: `uniid://access?token=${token}`,
     expiresAt: expiresAt.toISOString(),
+    expiresInMinutes: mins,
   });
 });
 
-// ─── GET /share/history — historial del usuario ───────────────────────────────
+// ─── POST /share/request-access — escáner envía token (público, sin auth) ────
+// NO devuelve datos. Solo registra la solicitud.
+router.post("/request-access", async (req: Request, res: Response) => {
+  const { token, requesterDevice } = req.body as {
+    token: string;
+    requesterDevice?: string;
+  };
+
+  if (!token || typeof token !== "string") {
+    res.status(400).json({ error: "Token requerido" });
+    return;
+  }
+
+  const shareRow = await queryOne<{
+    id: string;
+    user_id: string;
+    expires_at: string;
+    revoked: boolean;
+  }>(
+    `SELECT id, user_id, expires_at, revoked FROM uni_share_tokens WHERE id = $1`,
+    [token]
+  );
+
+  if (!shareRow) {
+    res.status(404).json({ error: "Token inválido o no encontrado" });
+    return;
+  }
+  if (shareRow.revoked) {
+    res.status(410).json({ error: "Este token fue revocado" });
+    return;
+  }
+  if (new Date(shareRow.expires_at) < new Date()) {
+    res.status(410).json({ error: "Este token expiró" });
+    return;
+  }
+
+  const existingRequest = await queryOne<{ id: string; status: string }>(
+    `SELECT id, status FROM uni_access_requests WHERE share_token_id = $1`,
+    [token]
+  );
+
+  if (!existingRequest) {
+    res.status(404).json({ error: "Solicitud no encontrada" });
+    return;
+  }
+
+  if (existingRequest.status === "approved") {
+    res.status(409).json({ error: "Token ya fue usado" });
+    return;
+  }
+  if (existingRequest.status === "rejected") {
+    res.status(403).json({ error: "Acceso rechazado por el usuario" });
+    return;
+  }
+
+  await query(
+    `UPDATE uni_access_requests
+     SET status = 'pending', requester_ip = $2, requester_device = $3, updated_at = NOW()
+     WHERE id = $1`,
+    [existingRequest.id, req.ip ?? "unknown", requesterDevice ?? "Dispositivo desconocido"]
+  );
+
+  await log({
+    event: "share.access_requested",
+    ip: req.ip,
+    metadata: {
+      token: token.slice(0, 8) + "...",
+      ownerUserId: shareRow.user_id,
+      requesterDevice: requesterDevice ?? "unknown",
+    },
+  });
+
+  res.json({
+    requestId: existingRequest.id,
+    status: "pending",
+    message: "Solicitud enviada. Esperando aprobación del usuario.",
+  });
+});
+
+// ─── GET /share/pending — solicitudes pendientes del usuario autenticado ──────
+router.get("/pending", requireAuth, async (req: Request, res: Response) => {
+  const userId = req.user!.sub;
+
+  const requests = await query(
+    `SELECT r.id, r.share_token_id, r.status, r.requester_ip, r.requester_device,
+            r.permissions, r.created_at, r.updated_at, t.expires_at, t.label
+     FROM uni_access_requests r
+     JOIN uni_share_tokens t ON t.id = r.share_token_id
+     WHERE r.owner_user_id = $1
+       AND r.status = 'pending'
+       AND t.expires_at > NOW()
+       AND t.revoked = false
+     ORDER BY r.updated_at DESC`,
+    [userId]
+  );
+
+  res.json(requests);
+});
+
+// ─── POST /share/approve/:id — usuario aprueba la solicitud ──────────────────
+// Requiere autenticación + genera la respuesta con los datos permitidos
+router.post("/approve/:id", requireAuth, async (req: Request, res: Response) => {
+  const userId = req.user!.sub;
+  const { id } = req.params;
+
+  const request = await queryOne<{
+    id: string;
+    share_token_id: string;
+    owner_user_id: string;
+    status: string;
+    permissions: any;
+  }>(
+    `SELECT r.id, r.share_token_id, r.owner_user_id, r.status, r.permissions
+     FROM uni_access_requests r
+     JOIN uni_share_tokens t ON t.id = r.share_token_id
+     WHERE r.id = $1 AND r.owner_user_id = $2
+       AND t.expires_at > NOW() AND t.revoked = false`,
+    [id, userId]
+  );
+
+  if (!request) {
+    res.status(404).json({ error: "Solicitud no encontrada o expirada" });
+    return;
+  }
+  if (request.status !== "pending") {
+    res.status(409).json({ error: "Esta solicitud ya fue procesada" });
+    return;
+  }
+
+  const owner = await queryOne<{
+    id: string; name: string; bio: string | null;
+    global_id: string | null; network_plan: string; created_at: string;
+  }>(
+    `SELECT id, name, bio, global_id, network_plan, created_at FROM uni_users WHERE id = $1`,
+    [userId]
+  );
+
+  if (!owner) {
+    res.status(404).json({ error: "Usuario no encontrado" });
+    return;
+  }
+
+  const perms = typeof request.permissions === "string"
+    ? JSON.parse(request.permissions)
+    : (request.permissions ?? {});
+
+  const shortId = owner.global_id
+    ? `#${owner.global_id.replace("did:uniid:", "").replace(/-/g, "").slice(0, 9).toUpperCase()}`
+    : null;
+
+  const responseData: Record<string, any> = { verified: true, issuer: "uni.id" };
+  if (perms.name !== false) responseData.name = owner.name;
+  if (perms.globalId !== false && owner.global_id) {
+    responseData.globalId = owner.global_id;
+    responseData.shortId = shortId;
+  }
+  if (perms.bio && owner.bio) responseData.bio = owner.bio;
+  if (perms.networkPlan) responseData.networkPlan = owner.network_plan;
+
+  await query(
+    `UPDATE uni_access_requests
+     SET status = 'approved', response_data = $2, updated_at = NOW()
+     WHERE id = $1`,
+    [id, JSON.stringify(responseData)]
+  );
+
+  await query(`UPDATE uni_share_tokens SET revoked = true WHERE id = $1`, [request.share_token_id]);
+
+  await log({
+    userId,
+    event: "share.approved",
+    ip: req.ip,
+    metadata: { requestId: id, permissionsGranted: Object.keys(responseData) },
+  });
+
+  res.json({ ok: true, data: responseData });
+});
+
+// ─── POST /share/reject/:id — usuario rechaza la solicitud ───────────────────
+router.post("/reject/:id", requireAuth, async (req: Request, res: Response) => {
+  const userId = req.user!.sub;
+  const { id } = req.params;
+
+  const request = await queryOne<{ id: string; share_token_id: string; status: string }>(
+    `SELECT r.id, r.share_token_id, r.status FROM uni_access_requests r
+     WHERE r.id = $1 AND r.owner_user_id = $2`,
+    [id, userId]
+  );
+
+  if (!request) {
+    res.status(404).json({ error: "Solicitud no encontrada" });
+    return;
+  }
+  if (request.status !== "pending") {
+    res.status(409).json({ error: "Solicitud ya procesada" });
+    return;
+  }
+
+  await query(
+    `UPDATE uni_access_requests SET status = 'rejected', updated_at = NOW() WHERE id = $1`,
+    [id]
+  );
+  await query(`UPDATE uni_share_tokens SET revoked = true WHERE id = $1`, [request.share_token_id]);
+
+  await log({
+    userId,
+    event: "share.rejected",
+    ip: req.ip,
+    metadata: { requestId: id },
+  });
+
+  res.json({ ok: true });
+});
+
+// ─── GET /share/result/:id — escáner consulta resultado de su solicitud ───────
+// Público — solo devuelve datos si fue aprobado, sin exponer datos del dueño
+router.get("/result/:id", async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const request = await queryOne<{
+    status: string;
+    response_data: any;
+    updated_at: string;
+  }>(
+    `SELECT r.status, r.response_data, r.updated_at
+     FROM uni_access_requests r
+     JOIN uni_share_tokens t ON t.id = r.share_token_id
+     WHERE r.id = $1`,
+    [id]
+  );
+
+  if (!request) {
+    res.status(404).json({ error: "Solicitud no encontrada" });
+    return;
+  }
+
+  if (request.status === "pending" || request.status === "awaiting_scan") {
+    res.json({ status: "pending", message: "Esperando aprobación del usuario" });
+    return;
+  }
+  if (request.status === "rejected") {
+    res.json({ status: "rejected", message: "El usuario rechazó el acceso" });
+    return;
+  }
+  if (request.status === "approved") {
+    res.json({ status: "approved", data: request.response_data });
+    return;
+  }
+
+  res.json({ status: request.status });
+});
+
+// ─── GET /share/history — historial de tokens creados por el usuario ──────────
 router.get("/history", requireAuth, async (req: Request, res: Response) => {
   const userId = req.user!.sub;
   const tokens = await query(
-    `SELECT id, document_ids, label, expires_at, revoked, access_count, last_accessed_at, created_at
-     FROM uni_share_tokens
-     WHERE user_id = $1
-     ORDER BY created_at DESC
+    `SELECT t.id, t.label, t.expires_at, t.revoked, t.created_at,
+            r.status as request_status, r.requester_device, r.updated_at as request_updated_at
+     FROM uni_share_tokens t
+     LEFT JOIN uni_access_requests r ON r.share_token_id = t.id
+     WHERE t.user_id = $1
+     ORDER BY t.created_at DESC
      LIMIT 50`,
     [userId]
   );
   res.json(tokens);
 });
 
-// ─── DELETE /share/:token — revocar ──────────────────────────────────────────
+// ─── DELETE /share/:token — revocar token ─────────────────────────────────────
 router.delete("/:token", requireAuth, async (req: Request, res: Response) => {
   const userId = req.user!.sub;
   const { token } = req.params;
@@ -95,87 +338,37 @@ router.delete("/:token", requireAuth, async (req: Request, res: Response) => {
   if (row.user_id !== userId) { res.status(403).json({ error: "Sin permiso" }); return; }
 
   await query(`UPDATE uni_share_tokens SET revoked = true WHERE id = $1`, [token]);
+  await query(
+    `UPDATE uni_access_requests SET status = 'rejected', updated_at = NOW()
+     WHERE share_token_id = $1 AND status = 'pending'`,
+    [token]
+  );
   await log({ userId, event: "share.revoked", ip: req.ip, metadata: { token } });
   res.json({ ok: true });
 });
 
-// ─── GET /share/:token — vista pública (sin auth) ────────────────────────────
-router.get("/:token", async (req: Request, res: Response) => {
+// ─── GET /share/web/:token — página web cuando alguien abre el QR en browser ──
+// NO devuelve datos. Solo indica que se requiere la app.
+router.get("/web/:token", async (req: Request, res: Response) => {
   const { token } = req.params;
 
-  const row = await queryOne<{
-    id: string;
-    user_id: string;
-    document_ids: string[];
-    label: string | null;
-    expires_at: string;
-    revoked: boolean;
-    access_count: number;
-    allow_file_view: boolean;
-  }>(
-    `SELECT id, user_id, document_ids, label, expires_at, revoked, access_count, allow_file_view
-     FROM uni_share_tokens WHERE id = $1`,
+  const row = await queryOne<{ expires_at: string; revoked: boolean }>(
+    `SELECT expires_at, revoked FROM uni_share_tokens WHERE id = $1`,
     [token]
   );
 
-  if (!row) { res.status(404).json({ error: "Enlace no encontrado" }); return; }
-  if (row.revoked) { res.status(410).json({ error: "Este enlace fue revocado" }); return; }
-  if (new Date(row.expires_at) < new Date()) {
-    res.status(410).json({ error: "Este enlace expiró" });
+  if (!row || row.revoked || new Date(row.expires_at) < new Date()) {
+    res.status(410).json({
+      status: "expired",
+      message: "Este token expiró o fue revocado",
+    });
     return;
   }
 
-  // Registrar acceso
-  await query(
-    `UPDATE uni_share_tokens SET access_count = access_count + 1, last_accessed_at = NOW() WHERE id = $1`,
-    [token]
-  );
-
-  const owner = await queryOne<{ name: string }>(
-    `SELECT name FROM uni_users WHERE id = $1`,
-    [row.user_id]
-  );
-
-  const docFields = row.allow_file_view
-    ? "id, title, category, description, tags, file_name, file_type, file_size, created_at, updated_at"
-    : "id, title, category, description, tags, created_at, updated_at";
-
-  const docs = await query<{
-    id: string;
-    title: string;
-    category: string;
-    description: string | null;
-    tags: string[] | null;
-    file_name?: string | null;
-    file_type?: string | null;
-    file_size?: number | null;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `SELECT ${docFields} FROM uni_documents WHERE id = ANY($1) AND user_id = $2`,
-    [row.document_ids, row.user_id]
-  );
-
-  await log({
-    event: "share.accessed",
-    ip: req.ip,
-    metadata: { token: token.slice(0, 8) + "...", documentCount: docs.length },
-  });
-
-  const watermark = {
-    ownerName: owner?.name ?? "Usuario",
-    sharedAt: new Date().toISOString(),
-    tokenId: token.slice(0, 8),
-  };
-
   res.json({
-    label: row.label,
-    owner: { name: owner?.name ?? "Usuario" },
-    documents: docs,
-    expiresAt: row.expires_at,
-    accessCount: row.access_count + 1,
-    allowFileView: row.allow_file_view,
-    watermark,
+    status: "requires_app",
+    message: "Esta identidad requiere autorización del usuario. Abrí uni.id para continuar.",
+    deepLink: `uniid://access?token=${token}`,
   });
 });
 

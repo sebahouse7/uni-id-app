@@ -1,5 +1,4 @@
 import { Feather } from "@expo/vector-icons";
-import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -10,10 +9,8 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useColorScheme,
 } from "react-native";
@@ -22,28 +19,30 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { Radii, Shadows, Spacing } from "@/constants/design";
-import { CATEGORIES, useIdentity } from "@/context/IdentityContext";
 import {
-  apiShareCreate,
-  apiShareHistory,
-  apiShareRevoke,
+  apiShareApprove,
+  apiShareCreateQr,
+  apiShareGetPending,
+  apiShareReject,
 } from "@/lib/apiClient";
 
 const EXPIRY_OPTIONS = [
+  { label: "2 min", minutes: 2 },
+  { label: "3 min", minutes: 3 },
   { label: "5 min", minutes: 5 },
-  { label: "1 hora", minutes: 60 },
-  { label: "24 horas", minutes: 1440 },
-  { label: "7 días", minutes: 10080 },
 ];
 
-interface ShareToken {
+interface PendingRequest {
   id: string;
-  document_ids: string[];
-  label: string | null;
-  expires_at: string;
-  revoked: boolean;
-  access_count: number;
+  share_token_id: string;
+  status: string;
+  requester_ip: string | null;
+  requester_device: string | null;
+  permissions: Record<string, boolean>;
   created_at: string;
+  updated_at: string;
+  expires_at: string;
+  label: string | null;
 }
 
 export default function ShareScreen() {
@@ -51,28 +50,27 @@ export default function ShareScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { documents } = useIdentity();
 
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [expiry, setExpiry] = useState(60);
-  const [label, setLabel] = useState("");
+  const [expiry, setExpiry] = useState(3);
   const [generating, setGenerating] = useState(false);
   const [qrResult, setQrResult] = useState<{
     token: string;
-    url: string;
+    qrContent: string;
     expiresAt: string;
+    expiresInMinutes: number;
   } | null>(null);
-  const [history, setHistory] = useState<ShareToken[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
-  const [allowFileView, setAllowFileView] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<PendingRequest | null>(null);
+  const [approving, setApproving] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(0);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const qrPulse = useRef(new Animated.Value(1)).current;
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-    loadHistory();
   }, []);
 
   useEffect(() => {
@@ -88,107 +86,108 @@ export default function ShareScreen() {
     }
   }, [showQrModal]);
 
-  const loadHistory = async () => {
-    setLoadingHistory(true);
-    try {
-      const h = await apiShareHistory();
-      setHistory(h);
-    } catch {}
-    setLoadingHistory(false);
-  };
+  const startPolling = useCallback(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const pending = await apiShareGetPending();
+        if (pending && pending.length > 0) {
+          setPendingRequest(pending[0] as PendingRequest);
+        }
+      } catch {}
+    }, 3000);
+  }, []);
 
-  const toggleDoc = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    if (selected.size === documents.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(documents.map((d) => d.id)));
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
     }
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
+
+  const handleCloseQr = () => {
+    stopPolling();
+    setShowQrModal(false);
+    setQrResult(null);
+    setPendingRequest(null);
   };
 
   const handleGenerate = async () => {
-    if (selected.size === 0) {
-      Alert.alert("Seleccioná al menos un documento");
-      return;
-    }
     setGenerating(true);
+    setPendingRequest(null);
     try {
-      const result = await apiShareCreate({
-        documentIds: Array.from(selected),
-        label: label.trim() || undefined,
+      const result = await apiShareCreateQr({
+        permissions: { name: true, globalId: true },
         expiresInMinutes: expiry,
-        allowFileView,
       });
       setQrResult(result);
       setShowQrModal(true);
-      loadHistory();
+      setSecondsLeft(expiry * 60);
+
+      countdownRef.current = setInterval(() => {
+        setSecondsLeft((s) => {
+          if (s <= 1) {
+            stopPolling();
+            setShowQrModal(false);
+            setQrResult(null);
+            return 0;
+          }
+          return s - 1;
+        });
+      }, 1000);
+
+      startPolling();
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      Alert.alert("Error", e.message ?? "No se pudo generar el QR");
     } finally {
       setGenerating(false);
     }
   };
 
-  const handleCopy = async () => {
-    if (!qrResult) return;
-    await Clipboard.setStringAsync(qrResult.url);
-    Alert.alert("¡Copiado!", "El link fue copiado al portapapeles.");
-  };
-
-  const handleShare = async () => {
-    if (!qrResult) return;
+  const handleApprove = async () => {
+    if (!pendingRequest) return;
+    setApproving(true);
     try {
-      await Share.share({
-        message: `Mirá mi identidad digital en uni.id:\n${qrResult.url}`,
-        url: qrResult.url,
-      });
-    } catch {}
+      await apiShareApprove(pendingRequest.id);
+      stopPolling();
+      setShowQrModal(false);
+      setQrResult(null);
+      setPendingRequest(null);
+      Alert.alert("✓ Acceso concedido", "Compartiste tu identidad exitosamente.");
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "No se pudo aprobar");
+    } finally {
+      setApproving(false);
+    }
   };
 
-  const handleRevoke = (token: string) => {
-    Alert.alert(
-      "Revocar enlace",
-      "¿Estás seguro? Quienes tengan el link ya no podrán acceder.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Revocar",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await apiShareRevoke(token);
-              loadHistory();
-            } catch (e: any) {
-              Alert.alert("Error", e.message);
-            }
-          },
-        },
-      ]
-    );
+  const handleReject = async () => {
+    if (!pendingRequest) return;
+    try {
+      await apiShareReject(pendingRequest.id);
+      setPendingRequest(null);
+      stopPolling();
+      setShowQrModal(false);
+      setQrResult(null);
+      Alert.alert("Acceso rechazado", "La solicitud fue denegada y el QR invalidado.");
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "No se pudo rechazar");
+    }
   };
 
-  const formatExpiry = (isoDate: string) => {
-    const d = new Date(isoDate);
-    const now = new Date();
-    if (d < now) return "Expirado";
-    const diffMs = d.getTime() - now.getTime();
-    const diffMins = Math.ceil(diffMs / 60000);
-    if (diffMins < 60) return `${diffMins} min`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h`;
-    return `${Math.floor(diffHours / 24)}d`;
+  const formatSecondsLeft = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, "0")}`;
   };
-
-  const activeHistory = history.filter((h) => !h.revoked && new Date(h.expires_at) > new Date());
-  const expiredHistory = history.filter((h) => h.revoked || new Date(h.expires_at) <= new Date());
 
   return (
     <Animated.View style={[{ flex: 1, backgroundColor: colors.background }, { opacity: fadeAnim }]}>
@@ -211,12 +210,12 @@ export default function ShareScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.title, { color: colors.text }]}>Compartir identidad</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Generá un QR o link temporal
+              QR seguro con aprobación manual
             </Text>
           </View>
         </View>
 
-        {/* Info card */}
+        {/* Security info card */}
         <LinearGradient
           colors={isDark ? ["#0A1628", "#0D2040"] : ["#EEF4FF", "#E0ECFF"]}
           style={[styles.infoCard, { borderColor: isDark ? "#1A3060" : "#C8D8F0" }]}
@@ -225,93 +224,34 @@ export default function ShareScreen() {
             <Feather name="shield" size={20} color="#1A6FE8" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.infoTitle, { color: colors.text }]}>Compartido seguro y temporal</Text>
+            <Text style={[styles.infoTitle, { color: colors.text }]}>Flujo seguro con aprobación</Text>
             <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              El QR expira automáticamente. Solo se comparten título, categoría y descripción — nunca archivos.
+              El QR no contiene datos. Cuando alguien lo escanea, vos aprobás o rechazás el acceso desde esta pantalla.
             </Text>
           </View>
         </LinearGradient>
 
-        {/* Document selector */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Documentos a compartir</Text>
-            {documents.length > 0 && (
-              <Pressable onPress={toggleAll}>
-                <Text style={[styles.selectAll, { color: colors.tint }]}>
-                  {selected.size === documents.length ? "Deseleccionar todo" : "Seleccionar todo"}
-                </Text>
-              </Pressable>
-            )}
-          </View>
-
-          {documents.length === 0 ? (
-            <View style={[styles.emptyDocs, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
-              <Feather name="folder" size={24} color={colors.textSecondary} />
-              <Text style={[styles.emptyDocsText, { color: colors.textSecondary }]}>
-                No tenés documentos. Agregá uno primero.
-              </Text>
+        {/* Flow steps */}
+        <View style={[styles.stepsCard, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
+          {[
+            { icon: "maximize", label: "Generás un QR temporal (2-5 min)" },
+            { icon: "smartphone", label: "Alguien escanea el QR con su app" },
+            { icon: "bell", label: "Te llega una notificación aquí" },
+            { icon: "check-circle", label: "Vos aprobás o rechazás el acceso" },
+          ].map((step, i) => (
+            <View key={i} style={styles.stepRow}>
+              <View style={[styles.stepNum, { backgroundColor: "#1A6FE8" + "18" }]}>
+                <Text style={[styles.stepNumText, { color: "#1A6FE8" }]}>{i + 1}</Text>
+              </View>
+              <Feather name={step.icon as any} size={14} color={colors.textSecondary} style={{ marginHorizontal: 8 }} />
+              <Text style={[styles.stepLabel, { color: colors.textSecondary }]}>{step.label}</Text>
             </View>
-          ) : (
-            documents.map((doc) => {
-              const cat = CATEGORIES.find((c) => c.key === doc.category);
-              const isSelected = selected.has(doc.id);
-              return (
-                <Pressable
-                  key={doc.id}
-                  onPress={() => toggleDoc(doc.id)}
-                  style={[
-                    styles.docRow,
-                    {
-                      backgroundColor: isSelected
-                        ? (cat?.color ?? colors.tint) + "12"
-                        : colors.backgroundCard,
-                      borderColor: isSelected
-                        ? (cat?.color ?? colors.tint) + "50"
-                        : colors.border,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.docIcon,
-                      { backgroundColor: (cat?.color ?? "#1A6FE8") + "18" },
-                    ]}
-                  >
-                    <Feather
-                      name={(cat?.icon as any) ?? "file"}
-                      size={18}
-                      color={cat?.color ?? "#1A6FE8"}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.docTitle, { color: colors.text }]} numberOfLines={1}>
-                      {doc.title}
-                    </Text>
-                    <Text style={[styles.docCat, { color: colors.textSecondary }]}>
-                      {cat?.label ?? "Documento"}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.checkbox,
-                      {
-                        backgroundColor: isSelected ? (cat?.color ?? colors.tint) : "transparent",
-                        borderColor: isSelected ? (cat?.color ?? colors.tint) : colors.border,
-                      },
-                    ]}
-                  >
-                    {isSelected && <Feather name="check" size={12} color="#fff" />}
-                  </View>
-                </Pressable>
-              );
-            })
-          )}
+          ))}
         </View>
 
-        {/* Expiry selector */}
+        {/* Expiry */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Tiempo de expiración</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Tiempo de expiración del QR</Text>
           <View style={styles.expiryRow}>
             {EXPIRY_OPTIONS.map((opt) => (
               <Pressable
@@ -320,19 +260,12 @@ export default function ShareScreen() {
                 style={[
                   styles.expiryChip,
                   {
-                    backgroundColor:
-                      expiry === opt.minutes ? colors.tint : colors.backgroundCard,
-                    borderColor:
-                      expiry === opt.minutes ? colors.tint : colors.border,
+                    backgroundColor: expiry === opt.minutes ? colors.tint : colors.backgroundCard,
+                    borderColor: expiry === opt.minutes ? colors.tint : colors.border,
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.expiryText,
-                    { color: expiry === opt.minutes ? "#fff" : colors.textSecondary },
-                  ]}
-                >
+                <Text style={[styles.expiryText, { color: expiry === opt.minutes ? "#fff" : colors.textSecondary }]}>
                   {opt.label}
                 </Text>
               </Pressable>
@@ -340,128 +273,48 @@ export default function ShareScreen() {
           </View>
         </View>
 
-        {/* Allow file view */}
-        <View style={[styles.section, { marginBottom: 16 }]}>
-          <Pressable
-            onPress={() => setAllowFileView((v) => !v)}
-            style={[
-              styles.toggleRow,
-              {
-                backgroundColor: allowFileView ? "#1A6FE812" : colors.backgroundCard,
-                borderColor: allowFileView ? "#1A6FE840" : colors.border,
-              },
-            ]}
-          >
-            <View style={[styles.infoIcon2, { backgroundColor: allowFileView ? "#1A6FE818" : colors.border + "40" }]}>
-              <Feather name="eye" size={16} color={allowFileView ? "#1A6FE8" : colors.textSecondary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.toggleTitle, { color: colors.text }]}>Vista completa de documentos</Text>
-              <Text style={[styles.toggleSub, { color: colors.textSecondary }]}>
-                {allowFileView ? "El receptor verá detalles completos" : "Solo se muestra título y categoría"}
-              </Text>
-            </View>
-            <View style={[
-              styles.toggleSwitch,
-              { backgroundColor: allowFileView ? "#1A6FE8" : colors.border }
-            ]}>
-              <View style={[styles.toggleThumb, { transform: [{ translateX: allowFileView ? 16 : 0 }] }]} />
-            </View>
-          </Pressable>
-        </View>
-
-        {/* Label */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Etiqueta <Text style={{ fontFamily: "Inter_400Regular", fontSize: 13 }}>(opcional)</Text>
-          </Text>
-          <View
-            style={[
-              styles.labelInput,
-              { backgroundColor: colors.backgroundCard, borderColor: colors.border },
-            ]}
-          >
-            <Feather name="tag" size={16} color={colors.textSecondary} />
-            <TextInput
-              value={label}
-              onChangeText={setLabel}
-              placeholder="Ej: Entrevista de trabajo"
-              placeholderTextColor={colors.textSecondary}
-              style={[styles.labelInputText, { color: colors.text }]}
-              maxLength={100}
-            />
+        {/* What will be shared */}
+        <View style={[styles.permissionsCard, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <Feather name="eye" size={14} color="#1A6FE8" />
+            <Text style={[styles.permTitle, { color: colors.text }]}>Datos que se compartirán</Text>
           </View>
+          {[
+            { icon: "user", label: "Nombre completo", granted: true },
+            { icon: "hash", label: "ID único (did:uniid)", granted: true },
+            { icon: "file-text", label: "Documentos personales", granted: false },
+            { icon: "mail", label: "Email o datos de contacto", granted: false },
+          ].map((item, i) => (
+            <View key={i} style={styles.permRow}>
+              <Feather name={item.icon as any} size={13} color={item.granted ? "#1A6FE8" : colors.textSecondary} />
+              <Text style={[styles.permLabel, { color: item.granted ? colors.text : colors.textSecondary }]}>
+                {item.label}
+              </Text>
+              <Feather
+                name={item.granted ? "check" : "x"}
+                size={13}
+                color={item.granted ? "#22C55E" : "#E53535"}
+              />
+            </View>
+          ))}
         </View>
 
         {/* Generate button */}
         <Pressable
           onPress={handleGenerate}
-          disabled={generating || selected.size === 0}
-          style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+          disabled={generating}
+          style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, marginTop: 8 })}
         >
           <LinearGradient
-            colors={
-              selected.size === 0
-                ? [colors.textSecondary + "60", colors.textSecondary + "40"]
-                : ["#1A6FE8", "#0D8AEB"]
-            }
+            colors={["#1A6FE8", "#0D8AEB"]}
             style={[styles.generateBtn, Shadows.colored("#1A6FE8")]}
           >
             <Feather name="maximize" size={20} color="#fff" />
             <Text style={styles.generateBtnText}>
-              {generating
-                ? "Generando..."
-                : `Generar QR (${selected.size} doc${selected.size !== 1 ? "s" : ""})`}
+              {generating ? "Generando QR..." : "Generar QR seguro"}
             </Text>
           </LinearGradient>
         </Pressable>
-
-        {/* History */}
-        {history.length > 0 && (
-          <View style={[styles.section, { marginTop: 28 }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Historial de compartidos
-            </Text>
-
-            {activeHistory.map((item) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.historyCard,
-                  { backgroundColor: colors.backgroundCard, borderColor: colors.border },
-                  Shadows.sm,
-                ]}
-              >
-                <View style={[styles.historyIcon, { backgroundColor: "#1A6FE818" }]}>
-                  <Feather name="link" size={16} color="#1A6FE8" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.historyLabel, { color: colors.text }]} numberOfLines={1}>
-                    {item.label ?? `${item.document_ids.length} documento${item.document_ids.length !== 1 ? "s" : ""}`}
-                  </Text>
-                  <Text style={[styles.historyMeta, { color: colors.textSecondary }]}>
-                    Expira en {formatExpiry(item.expires_at)} · {item.access_count} acceso
-                    {item.access_count !== 1 ? "s" : ""}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => handleRevoke(item.id)}
-                  style={[styles.revokeBtn, { backgroundColor: "#E5353518" }]}
-                >
-                  <Feather name="x" size={14} color="#E53535" />
-                </Pressable>
-              </View>
-            ))}
-
-            {expiredHistory.length > 0 && (
-              <Text style={[styles.expiredLabel, { color: colors.textSecondary }]}>
-                {expiredHistory.length} enlace{expiredHistory.length !== 1 ? "s" : ""} expirado
-                {expiredHistory.length !== 1 ? "s" : ""} / revocado
-                {expiredHistory.length !== 1 ? "s" : ""}
-              </Text>
-            )}
-          </View>
-        )}
       </ScrollView>
 
       {/* QR Modal */}
@@ -469,67 +322,125 @@ export default function ShareScreen() {
         visible={showQrModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowQrModal(false)}
+        onRequestClose={handleCloseQr}
       >
         <View style={[styles.modal, { backgroundColor: colors.background }]}>
           <View style={styles.modalHandle} />
 
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Tu QR de identidad</Text>
-            <Pressable onPress={() => setShowQrModal(false)}>
-              <View style={[styles.closeBtn, { backgroundColor: colors.backgroundCard }]}>
-                <Feather name="x" size={18} color={colors.text} />
+          {/* If pending request — show approval dialog */}
+          {pendingRequest ? (
+            <View style={{ flex: 1, padding: 24 }}>
+              <View style={[styles.alertIconWrap, { backgroundColor: "#F59E0B18" }]}>
+                <Feather name="bell" size={28} color="#F59E0B" />
               </View>
-            </Pressable>
-          </View>
+              <Text style={[styles.alertTitle, { color: colors.text }]}>
+                Solicitud de acceso a tu identidad
+              </Text>
+              <Text style={[styles.alertSub, { color: colors.textSecondary }]}>
+                Alguien escaneó tu QR y solicita acceso a tus datos de identidad.
+              </Text>
 
-          {qrResult && (
-            <>
-              <Animated.View style={[styles.qrContainer, { backgroundColor: "#fff", transform: [{ scale: qrPulse }] }]}>
-                <QRCode
-                  value={qrResult.url}
-                  size={220}
-                  color="#060B18"
-                  backgroundColor="#fff"
-                />
-              </Animated.View>
-
-              <View style={[styles.expiryBadge, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
-                <Feather name="clock" size={14} color={colors.textSecondary} />
-                <Text style={[styles.expiryBadgeText, { color: colors.textSecondary }]}>
-                  Expira: {new Date(qrResult.expiresAt).toLocaleString("es-AR", {
-                    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-                  })}
-                </Text>
-              </View>
-
-              <View style={[styles.urlBox, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
-                <Text style={[styles.urlText, { color: colors.textSecondary }]} numberOfLines={1} selectable>
-                  {qrResult.url}
-                </Text>
+              <View style={[styles.requesterCard, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
+                <View style={styles.requesterRow}>
+                  <Feather name="smartphone" size={15} color={colors.textSecondary} />
+                  <Text style={[styles.requesterLabel, { color: colors.textSecondary }]}>Dispositivo</Text>
+                  <Text style={[styles.requesterValue, { color: colors.text }]} numberOfLines={1}>
+                    {pendingRequest.requester_device ?? "Desconocido"}
+                  </Text>
+                </View>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <View style={styles.requesterRow}>
+                  <Feather name="globe" size={15} color={colors.textSecondary} />
+                  <Text style={[styles.requesterLabel, { color: colors.textSecondary }]}>IP</Text>
+                  <Text style={[styles.requesterValue, { color: colors.text }]}>
+                    {pendingRequest.requester_ip ?? "—"}
+                  </Text>
+                </View>
               </View>
 
-              <View style={styles.modalActions}>
+              <View style={[styles.permissionsCard2, { backgroundColor: "#1A6FE808", borderColor: "#1A6FE830" }]}>
+                <Text style={[styles.permTitle, { color: colors.text, marginBottom: 8 }]}>Datos solicitados:</Text>
+                <Text style={[styles.permItem, { color: colors.textSecondary }]}>• Nombre completo</Text>
+                <Text style={[styles.permItem, { color: colors.textSecondary }]}>• ID único (did:uniid)</Text>
+              </View>
+
+              <View style={styles.approvalButtons}>
                 <Pressable
-                  onPress={handleCopy}
-                  style={[styles.modalBtn, { backgroundColor: colors.backgroundCard, borderColor: colors.border, borderWidth: 1 }]}
+                  onPress={handleReject}
+                  style={[styles.rejectBtn, { borderColor: "#E53535" }]}
                 >
-                  <Feather name="copy" size={16} color={colors.text} />
-                  <Text style={[styles.modalBtnText, { color: colors.text }]}>Copiar link</Text>
+                  <Feather name="x" size={18} color="#E53535" />
+                  <Text style={[styles.rejectBtnText]}>Rechazar</Text>
                 </Pressable>
                 <Pressable
-                  onPress={handleShare}
+                  onPress={handleApprove}
+                  disabled={approving}
                   style={{ flex: 1 }}
                 >
                   <LinearGradient
-                    colors={["#1A6FE8", "#0D8AEB"]}
-                    style={styles.modalBtn}
+                    colors={["#22C55E", "#16A34A"]}
+                    style={styles.approveBtn}
                   >
-                    <Feather name="share-2" size={16} color="#fff" />
-                    <Text style={[styles.modalBtnText, { color: "#fff" }]}>Compartir</Text>
+                    <Feather name="check" size={18} color="#fff" />
+                    <Text style={styles.approveBtnText}>
+                      {approving ? "Aprobando..." : "Aceptar"}
+                    </Text>
                   </LinearGradient>
                 </Pressable>
               </View>
+            </View>
+          ) : (
+            /* QR view — waiting for scan */
+            <>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Tu QR de identidad</Text>
+                <Pressable onPress={handleCloseQr}>
+                  <View style={[styles.closeBtn, { backgroundColor: colors.backgroundCard }]}>
+                    <Feather name="x" size={18} color={colors.text} />
+                  </View>
+                </Pressable>
+              </View>
+
+              {qrResult && (
+                <>
+                  <Animated.View style={[styles.qrContainer, { backgroundColor: "#fff", transform: [{ scale: qrPulse }] }]}>
+                    <QRCode
+                      value={qrResult.qrContent}
+                      size={220}
+                      color="#060B18"
+                      backgroundColor="#fff"
+                    />
+                  </Animated.View>
+
+                  <View style={[styles.timerBadge, {
+                    backgroundColor: secondsLeft < 60 ? "#E5353520" : "#1A6FE818",
+                    borderColor: secondsLeft < 60 ? "#E53535" : "#1A6FE840",
+                  }]}>
+                    <Feather name="clock" size={14} color={secondsLeft < 60 ? "#E53535" : "#1A6FE8"} />
+                    <Text style={[styles.timerText, { color: secondsLeft < 60 ? "#E53535" : "#1A6FE8" }]}>
+                      Expira en {formatSecondsLeft(secondsLeft)}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.waitingCard, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
+                    <View style={styles.pulsingDot} />
+                    <Text style={[styles.waitingText, { color: colors.textSecondary }]}>
+                      Esperando que alguien escanee...
+                    </Text>
+                  </View>
+
+                  <View style={[styles.tokenBox, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
+                    <Feather name="lock" size={13} color={colors.textSecondary} />
+                    <Text style={[styles.tokenText, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {qrResult.qrContent}
+                    </Text>
+                  </View>
+
+                  <Text style={[styles.securityNote, { color: colors.textSecondary }]}>
+                    El QR no contiene datos personales. Tu información solo se comparte si vos aprobás la solicitud.
+                  </Text>
+                </>
+              )}
             </>
           )}
         </View>
@@ -563,7 +474,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     alignItems: "flex-start",
-    marginBottom: 24,
+    marginBottom: 16,
   },
   infoIcon: {
     width: 40,
@@ -575,174 +486,86 @@ const styles = StyleSheet.create({
   infoTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
   infoText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
 
+  stepsCard: {
+    borderRadius: Radii.card,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 20,
+    gap: 10,
+  },
+  stepRow: { flexDirection: "row", alignItems: "center" },
+  stepNum: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepNumText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  stepLabel: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
+
   section: { marginBottom: 20 },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
   sectionTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 10 },
-  selectAll: { fontSize: 13, fontFamily: "Inter_500Medium" },
 
-  emptyDocs: {
-    borderRadius: Radii.lg,
-    borderWidth: 1,
-    padding: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  emptyDocsText: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1 },
-
-  docRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 12,
-    borderRadius: Radii.lg,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  docIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  docTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  docCat: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  expiryRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  expiryRow: { flexDirection: "row", gap: 8 },
   expiryChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
+    flex: 1,
+    paddingVertical: 10,
     borderRadius: Radii.pill,
     borderWidth: 1,
+    alignItems: "center",
   },
   expiryText: { fontSize: 13, fontFamily: "Inter_500Medium" },
 
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+  permissionsCard: {
+    borderRadius: Radii.card,
+    borderWidth: 1,
     padding: 14,
-    borderRadius: Radii.lg,
+    marginBottom: 20,
+  },
+  permissionsCard2: {
+    borderRadius: Radii.card,
     borderWidth: 1,
+    padding: 14,
+    marginBottom: 20,
   },
-  infoIcon2: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  toggleTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
-  toggleSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  toggleSwitch: {
-    width: 36,
-    height: 20,
-    borderRadius: 10,
-    padding: 2,
-  },
-  toggleThumb: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#fff",
-  },
-
-  labelInput: {
+  permTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  permRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: Radii.lg,
-    borderWidth: 1,
+    gap: 8,
+    paddingVertical: 5,
   },
-  labelInputText: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    padding: 0,
-  },
+  permLabel: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
+  permItem: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 4 },
 
   generateBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    paddingVertical: 16,
-    borderRadius: Radii.xl,
+    paddingVertical: 15,
+    borderRadius: Radii.button,
   },
-  generateBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-  },
+  generateBtnText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#fff" },
 
-  historyCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 12,
-    borderRadius: Radii.lg,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  historyIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  historyLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
-  historyMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  revokeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  expiredLabel: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    paddingTop: 8,
-  },
-
-  modal: {
-    flex: 1,
-    padding: Spacing.md,
-    paddingTop: 12,
-  },
+  modal: { flex: 1, paddingHorizontal: 24 },
   modalHandle: {
-    width: 40,
+    width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#8899BB40",
+    backgroundColor: "#CBD5E1",
     alignSelf: "center",
+    marginTop: 12,
     marginBottom: 20,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 28,
+    marginBottom: 24,
   },
-  modalTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
   closeBtn: {
     width: 36,
     height: 36,
@@ -750,44 +573,112 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   qrContainer: {
     alignSelf: "center",
-    padding: 20,
-    borderRadius: Radii.card,
+    padding: 16,
+    borderRadius: 20,
     marginBottom: 20,
+    ...Shadows.md,
   },
-  expiryBadge: {
+
+  timerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: Radii.pill,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  timerText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+
+  waitingCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: Radii.lg,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  pulsingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#22C55E",
+  },
+  waitingText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+
+  tokenBox: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    alignSelf: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radii.pill,
+    padding: 10,
+    borderRadius: Radii.lg,
     borderWidth: 1,
     marginBottom: 14,
   },
-  expiryBadgeText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  urlBox: {
-    borderRadius: Radii.lg,
+  tokenText: { fontSize: 11, fontFamily: "Inter_400Regular", flex: 1 },
+
+  securityNote: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 17,
+    paddingHorizontal: 8,
+  },
+
+  // Approval dialog
+  alertIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  alertTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 8 },
+  alertSub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 18, marginBottom: 20 },
+
+  requesterCard: {
+    borderRadius: Radii.card,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    marginBottom: 20,
+    padding: 14,
+    marginBottom: 16,
   },
-  urlText: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  modalActions: {
+  requesterRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  requesterLabel: { fontSize: 12, fontFamily: "Inter_400Regular", width: 70 },
+  requesterValue: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 },
+  divider: { height: 1, marginVertical: 10 },
+
+  approvalButtons: {
     flexDirection: "row",
-    gap: 10,
+    gap: 12,
+    marginTop: "auto" as any,
+    paddingBottom: 16,
   },
-  modalBtn: {
+  rejectBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
     paddingVertical: 14,
-    borderRadius: Radii.lg,
+    borderRadius: Radii.button,
+    borderWidth: 1.5,
   },
-  modalBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  rejectBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#E53535" },
+  approveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: Radii.button,
+  },
+  approveBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#fff" },
 });
