@@ -229,13 +229,38 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
       const session = await apiCheckSession();
 
       if (!session.authenticated) {
-        // Tokens expired or invalid — clear everything and go back to onboarding
-        await secureDelete(CACHE_KEY_NODE).catch(() => {});
-        await secureDelete(CACHE_KEY_DOCS).catch(() => {});
-        setNode(null);
-        setDocuments([]);
-        setIsOnline(false);
-        return;
+        // Tokens expired — try silent re-register with same device ID
+        // The backend is idempotent: same device_id returns the SAME user with fresh tokens
+        try {
+          const rawLocalNode = await secureGet(CACHE_KEY_NODE).catch(() => null);
+          const localNode: IdentityNode | null = rawLocalNode ? JSON.parse(rawLocalNode) : null;
+          const storedDeviceId = await getOrCreateDeviceId();
+          const localName = localNode?.name || "Usuario";
+          await apiRegister(storedDeviceId, localName, localNode?.bio);
+          // Tokens refreshed — retry session check
+          const retrySession = await apiCheckSession();
+          if (!retrySession.authenticated) throw new Error("Session unrecoverable");
+          // Merge recovered session data into local node
+          const recovered: IdentityNode = {
+            id: retrySession.user.id,
+            globalId: retrySession.user.global_id ?? localNode?.globalId ?? undefined,
+            name: retrySession.user.name || localNode?.name || "",
+            bio: retrySession.user.bio ?? localNode?.bio,
+            createdAt: retrySession.user.created_at || localNode?.createdAt || new Date().toISOString(),
+            networkPlan: retrySession.user.network_plan ?? localNode?.networkPlan,
+          };
+          await cacheNode(recovered);
+          setIsOnline(true);
+          return;
+        } catch {
+          // Cannot recover session — clear and force new onboarding
+          await secureDelete(CACHE_KEY_NODE).catch(() => {});
+          await secureDelete(CACHE_KEY_DOCS).catch(() => {});
+          setNode(null);
+          setDocuments([]);
+          setIsOnline(false);
+          return;
+        }
       }
 
       // Session valid — sync profile + documents
