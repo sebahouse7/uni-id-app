@@ -96,19 +96,31 @@ app.get("/api/dist-server/package.json", serveDeployFile("package.json", "applic
 
 // ─── APK download — public direct link ───────────────────────────────────────
 app.get("/api/download/uni-id.apk", (_req: Request, res: Response) => {
-  const apkPath = join("/home/runner/workspace/deploy", "uni-id.apk");
-  try {
-    statSync(apkPath);
-    res.sendFile(apkPath, {
-      headers: {
-        "Content-Type": "application/vnd.android.package-archive",
-        "Content-Disposition": 'attachment; filename="uni-id.apk"',
-        "Connection": "close",
-      },
-    });
-  } catch {
-    res.status(404).json({ error: "APK not available" });
+  const candidates = [
+    join(resolve(__dirname, "../../public"), "uni-id-latest.apk"),
+    join(resolve(__dirname, "../../public"), "uni-id-latest.zip"),
+    join("/home/runner/workspace/artifacts/api-server/public", "uni-id-latest.apk"),
+    join("/home/runner/workspace/artifacts/api-server/public", "uni-id-latest.zip"),
+  ];
+  for (const p of candidates) {
+    try {
+      statSync(p);
+      const isZip = p.endsWith(".zip");
+      res.sendFile(p, {
+        headers: {
+          "Content-Type": isZip ? "application/zip" : "application/vnd.android.package-archive",
+          "Content-Disposition": isZip
+            ? 'attachment; filename="uni-id-latest.zip"'
+            : 'attachment; filename="uni-id-latest.apk"',
+          "Connection": "close",
+        },
+      });
+      return;
+    } catch {
+      continue;
+    }
   }
+  res.status(404).json({ error: "APK not available — run a new build to generate it" });
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
