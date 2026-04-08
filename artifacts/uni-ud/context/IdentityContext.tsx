@@ -292,17 +292,29 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
 
   const updateNode = useCallback(async (data: Partial<IdentityNode>) => {
     if (!node) return;
-    if (isOnline) {
-      const updated = await apiUpdateProfile({ name: data.name, bio: data.bio });
-      const updatedNode: IdentityNode = {
-        ...node,
-        name: updated.name ?? node.name,
-        bio: updated.bio ?? node.bio,
-        networkPlan: updated.network_plan ?? node.networkPlan,
-      };
-      await cacheNode(updatedNode);
-    } else {
-      await cacheNode({ ...node, ...data });
+
+    // ── Optimistic local save first — user sees the change immediately ──────────
+    const localNode: IdentityNode = { ...node, ...data };
+    await cacheNode(localNode);
+
+    // ── Try to sync with backend if online and profile fields changed ───────────
+    if (isOnline && (data.name !== undefined || data.bio !== undefined)) {
+      try {
+        const updated = await apiUpdateProfile({
+          name: data.name ?? node.name,
+          bio: data.bio !== undefined ? (data.bio ?? null) : node.bio,
+        });
+        // Update local cache with confirmed backend data
+        await cacheNode({
+          ...localNode,
+          name: updated.name ?? localNode.name,
+          bio: updated.bio ?? localNode.bio,
+          networkPlan: updated.network_plan ?? localNode.networkPlan,
+        });
+      } catch {
+        // Backend failed — keep the optimistic local update
+        // Next successful sync will reconcile
+      }
     }
   }, [node, isOnline]);
 

@@ -6,10 +6,12 @@ import {
   Animated,
   Dimensions,
   FlatList,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
   useColorScheme,
 } from "react-native";
@@ -51,7 +53,15 @@ const slides = [
   },
 ];
 
-function SlideItem({ item, index, currentIndex }: { item: (typeof slides)[0]; index: number; currentIndex: number }) {
+function SlideItem({
+  item,
+  index,
+  currentIndex,
+}: {
+  item: (typeof slides)[0];
+  index: number;
+  currentIndex: number;
+}) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
@@ -69,7 +79,6 @@ function SlideItem({ item, index, currentIndex }: { item: (typeof slides)[0]; in
 
   return (
     <Animated.View style={[styles.slide, { width, opacity, transform: [{ scale }] }]}>
-      {/* Icon hero */}
       <View style={styles.iconArea}>
         <LinearGradient
           colors={item.gradient}
@@ -77,7 +86,6 @@ function SlideItem({ item, index, currentIndex }: { item: (typeof slides)[0]; in
           end={{ x: 1, y: 1 }}
           style={styles.iconGradient}
         >
-          {/* Decorative rings */}
           <View style={[styles.ring1, { borderColor: "rgba(255,255,255,0.12)" }]} />
           <View style={[styles.ring2, { borderColor: "rgba(255,255,255,0.07)" }]} />
           <View style={styles.iconCenter}>
@@ -85,7 +93,6 @@ function SlideItem({ item, index, currentIndex }: { item: (typeof slides)[0]; in
           </View>
         </LinearGradient>
       </View>
-
       <Text style={[styles.slideTitle, { color: colors.text }]}>{item.title}</Text>
       <Text style={[styles.slideSubtitle, { color: colors.textSecondary }]}>{item.subtitle}</Text>
     </Animated.View>
@@ -101,14 +108,27 @@ export default function OnboardingScreen() {
   const [current, setCurrent] = useState(0);
   const [regError, setRegError] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [showNameStep, setShowNameStep] = useState(false);
+  const [name, setName] = useState("");
   const flatRef = useRef<FlatList>(null);
   const btnScale = useRef(new Animated.Value(1)).current;
+  const nameInputRef = useRef<TextInput>(null);
 
   const handleGetStarted = async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setRegError("Ingresá tu nombre para continuar.");
+      return;
+    }
+    if (trimmedName.length < 2) {
+      setRegError("El nombre debe tener al menos 2 caracteres.");
+      return;
+    }
+
     setRegError(null);
     setIsRegistering(true);
     try {
-      await createNode({ name: "Mi Nodo", networkPlan: "free" });
+      await createNode({ name: trimmedName, networkPlan: "free" });
       router.replace("/(tabs)");
     } catch (e: any) {
       setRegError(e?.message ?? "Error al conectar con el servidor");
@@ -122,13 +142,132 @@ export default function OnboardingScreen() {
       flatRef.current?.scrollToIndex({ index: current + 1, animated: true });
       setCurrent(current + 1);
     } else {
-      handleGetStarted();
+      setShowNameStep(true);
+      setTimeout(() => nameInputRef.current?.focus(), 400);
     }
   };
 
-  const handleSkip = () => handleGetStarted();
+  const handleSkip = () => {
+    setShowNameStep(true);
+    setCurrent(slides.length - 1);
+    flatRef.current?.scrollToIndex({ index: slides.length - 1, animated: true });
+    setTimeout(() => nameInputRef.current?.focus(), 400);
+  };
 
-  const currentSlide = slides[current];
+  const currentSlide = slides[current] ?? slides[slides.length - 1];
+
+  if (showNameStep) {
+    return (
+      <KeyboardAvoidingView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <View style={[styles.nameStep, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 40 }]}>
+          {/* Logo */}
+          <View style={styles.logoRow}>
+            <View style={[styles.logoDot, { backgroundColor: "#1A6FE8" }]} />
+            <Text style={[styles.logoText, { color: colors.text }]}>uni.id</Text>
+          </View>
+
+          {/* Avatar preview */}
+          <View style={{ alignItems: "center", marginTop: 32, marginBottom: 24 }}>
+            <LinearGradient
+              colors={["#1A3F8F", "#1A6FE8"]}
+              style={styles.avatarPreview}
+            >
+              {name.trim() ? (
+                <Text style={styles.avatarLetter}>
+                  {name.trim()[0].toUpperCase()}
+                </Text>
+              ) : (
+                <Feather name="user" size={36} color="#fff" />
+              )}
+            </LinearGradient>
+          </View>
+
+          <Text style={[styles.nameTitle, { color: colors.text }]}>¿Cómo te llamás?</Text>
+          <Text style={[styles.nameSubtitle, { color: colors.textSecondary }]}>
+            Este nombre aparecerá en tu identidad digital. Podés cambiarlo después.
+          </Text>
+
+          {/* Name input */}
+          <View
+            style={[
+              styles.inputWrap,
+              {
+                backgroundColor: colors.backgroundCard,
+                borderColor: name.trim().length > 0 ? "#1A6FE8" : colors.border,
+              },
+            ]}
+          >
+            <Feather name="user" size={18} color={name.trim().length > 0 ? "#1A6FE8" : colors.textSecondary} />
+            <TextInput
+              ref={nameInputRef}
+              value={name}
+              onChangeText={(t) => { setName(t); setRegError(null); }}
+              placeholder="Tu nombre completo"
+              placeholderTextColor={colors.textSecondary}
+              style={[styles.nameInput, { color: colors.text }]}
+              maxLength={100}
+              returnKeyType="done"
+              onSubmitEditing={handleGetStarted}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+            {name.trim().length > 0 && (
+              <Feather name="check" size={16} color="#1A6FE8" />
+            )}
+          </View>
+
+          {/* Error */}
+          {regError && (
+            <View style={styles.errorBox}>
+              <Feather name="alert-circle" size={15} color="#F87171" />
+              <Text style={styles.errorText}>{regError}</Text>
+            </View>
+          )}
+
+          {/* CTA */}
+          <Pressable
+            onPress={handleGetStarted}
+            disabled={isRegistering}
+            style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, width: "100%", marginTop: 8 })}
+          >
+            <LinearGradient
+              colors={
+                isRegistering
+                  ? ["#3A4A6A", "#3A4A6A"]
+                  : name.trim().length >= 2
+                  ? ["#1A3F8F", "#1A6FE8"]
+                  : ["#2A3A5A", "#2A3A5A"]
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.ctaBtn}
+            >
+              <Text style={styles.ctaText}>
+                {isRegistering ? "Creando tu nodo..." : "Crear mi identidad"}
+              </Text>
+              <View style={styles.ctaIconWrap}>
+                <Feather
+                  name={isRegistering ? "loader" : "zap"}
+                  size={18}
+                  color="#fff"
+                />
+              </View>
+            </LinearGradient>
+          </Pressable>
+
+          <View style={[styles.trustRow, { marginTop: 20 }]}>
+            <Feather name="lock" size={12} color={colors.textSecondary} />
+            <Text style={[styles.trustText, { color: colors.textSecondary }]}>
+              Cifrado AES-256 · Sin acceso a tu contenido
+            </Text>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -186,8 +325,7 @@ export default function OnboardingScreen() {
               style={[
                 styles.dot,
                 {
-                  backgroundColor:
-                    i === current ? currentSlide.accentColor : colors.border,
+                  backgroundColor: i === current ? currentSlide.accentColor : colors.border,
                   width: i === current ? 28 : 8,
                 },
               ]}
@@ -209,18 +347,10 @@ export default function OnboardingScreen() {
             onPress={handleNext}
             disabled={isRegistering}
             onPressIn={() =>
-              Animated.spring(btnScale, {
-                toValue: 0.97,
-                useNativeDriver: true,
-                friction: 8,
-              }).start()
+              Animated.spring(btnScale, { toValue: 0.97, useNativeDriver: true, friction: 8 }).start()
             }
             onPressOut={() =>
-              Animated.spring(btnScale, {
-                toValue: 1,
-                useNativeDriver: true,
-                friction: 6,
-              }).start()
+              Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, friction: 6 }).start()
             }
           >
             <LinearGradient
@@ -233,18 +363,12 @@ export default function OnboardingScreen() {
                 {isRegistering
                   ? "Conectando..."
                   : current === slides.length - 1
-                  ? "Crear mi nodo"
+                  ? "Continuar"
                   : "Continuar"}
               </Text>
               <View style={styles.ctaIconWrap}>
                 <Feather
-                  name={
-                    isRegistering
-                      ? "loader"
-                      : current === slides.length - 1
-                      ? "zap"
-                      : "arrow-right"
-                  }
+                  name={isRegistering ? "loader" : "arrow-right"}
                   size={18}
                   color="#fff"
                 />
@@ -391,5 +515,52 @@ const styles = StyleSheet.create({
   trustText: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
+  },
+
+  nameStep: {
+    flex: 1,
+    paddingHorizontal: 28,
+    alignItems: "center",
+  },
+  avatarPreview: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarLetter: {
+    fontSize: 44,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+  },
+  nameTitle: {
+    fontSize: 28,
+    fontFamily: "Inter_700Bold",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  nameSubtitle: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 28,
+  },
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1.5,
+    borderRadius: Radii.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    width: "100%",
+    marginBottom: 16,
+  },
+  nameInput: {
+    flex: 1,
+    fontSize: 17,
+    fontFamily: "Inter_500Medium",
   },
 });

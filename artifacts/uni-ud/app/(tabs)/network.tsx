@@ -55,8 +55,8 @@ export default function NetworkScreen() {
 
       if (!result.url) {
         Alert.alert(
-          "Pago no disponible",
-          "El sistema de pagos no está configurado en este momento. Por favor contactá a soporte@uniid.app."
+          "Sin link de pago",
+          "El servidor no devolvió un link de pago. Verificá tu conexión e intentá de nuevo."
         );
         return;
       }
@@ -64,36 +64,43 @@ export default function NetworkScreen() {
       const status = await openPaymentBrowser(result.url);
 
       if (status === "cancelled") {
-        Alert.alert("Pago cancelado", "Podés intentarlo de nuevo cuando quieras.");
-      } else {
-        // Poll backend for real subscription status — never trust client-side
-        let attempts = 0;
-        let activated = false;
-        while (attempts < 6 && !activated) {
-          await new Promise((r) => setTimeout(r, 2500));
-          try {
-            const sub = await apiGetSubscriptionStatus();
-            const activePlan = sub?.current?.plan;
-            if (activePlan && activePlan !== "free" && sub?.current?.isActive) {
-              await updateNode({ networkPlan: activePlan as "basic" | "pro" });
-              Alert.alert(
-                t.planActivated,
-                `${t.planActivatedDesc} ${activePlan === "basic" ? t.planBasic ?? "Básico" : t.planPro ?? "Pro"}.`
-              );
-              activated = true;
-            }
-          } catch {}
-          attempts++;
-        }
-        if (!activated) {
-          Alert.alert(
-            "Pago en procesamiento",
-            "Tu pago está siendo verificado. El plan se activará en unos minutos. Podés cerrar y volver a abrir la app."
-          );
-        }
+        // User closed the browser — don't show an alert, just reset
+        return;
+      }
+
+      // Poll backend for real subscription status — never trust client-side
+      let attempts = 0;
+      let activated = false;
+      while (attempts < 8 && !activated) {
+        await new Promise((r) => setTimeout(r, 2000));
+        try {
+          const sub = await apiGetSubscriptionStatus();
+          const activePlan = sub?.current?.plan;
+          if (activePlan && activePlan !== "free" && sub?.current?.isActive) {
+            await updateNode({ networkPlan: activePlan as "basic" | "pro" });
+            Alert.alert(
+              "✅ Plan activado",
+              `Tu plan ${activePlan === "basic" ? "Conexión Básica" : "Conexión Pro"} está activo.`
+            );
+            activated = true;
+          }
+        } catch {}
+        attempts++;
+      }
+      if (!activated) {
+        Alert.alert(
+          "Pago en verificación",
+          "Tu pago está siendo procesado. El plan se activará automáticamente. Cerrá y abrí la app en unos minutos."
+        );
       }
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Error al procesar el pago");
+      const msg = e?.message ?? "Error desconocido";
+      Alert.alert(
+        "Error al procesar pago",
+        msg.includes("Tiempo de espera") || msg.includes("conexión")
+          ? "Sin conexión al servidor. Verificá tu internet e intentá de nuevo."
+          : msg
+      );
     } finally {
       setPurchasing(null);
     }
