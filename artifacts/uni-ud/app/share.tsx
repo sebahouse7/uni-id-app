@@ -236,7 +236,20 @@ export default function ShareScreen() {
       setPinInput("");
       setPinError("");
     } else {
-      await doApprove();
+      Alert.alert(
+        "PIN requerido",
+        "Debés configurar un PIN para poder aprobar accesos a tu identidad.",
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Ir a Seguridad",
+            onPress: () => {
+              handleCloseQr();
+              router.push("/(tabs)/security" as any);
+            },
+          },
+        ]
+      );
     }
   };
 
@@ -483,6 +496,15 @@ export default function ShareScreen() {
             Al confirmar, tu consentimiento quedará registrado con fecha y hora.
           </Text>
 
+          {Platform.OS !== "web" && !hasPin && !(hasBiometrics && biometricsEnabled) && (
+            <View style={[styles.noAuthWarning, { backgroundColor: "#E5353510", borderColor: "#E5353540" }]}>
+              <Feather name="alert-triangle" size={14} color="#E53535" />
+              <Text style={styles.noAuthWarningText}>
+                No tenés PIN ni biometría configurados. Configurá un PIN para poder aprobar accesos.
+              </Text>
+            </View>
+          )}
+
           <View style={styles.approvalButtons}>
             <Pressable
               onPress={() => setApproveStep("request")}
@@ -491,14 +513,23 @@ export default function ShareScreen() {
               <Feather name="arrow-left" size={18} color={colors.text} />
               <Text style={[styles.rejectBtnText, { color: colors.text }]}>Volver</Text>
             </Pressable>
-            <Pressable onPress={handleConsentConfirm} disabled={approving} style={{ flex: 1 }}>
-              <LinearGradient colors={["#22C55E", "#16A34A"]} style={styles.approveBtn}>
-                <Feather name="lock" size={18} color="#fff" />
-                <Text style={styles.approveBtnText}>
-                  {hasBiometrics && biometricsEnabled ? "Confirmar con biometría" : hasPin ? "Confirmar con PIN" : "Confirmar"}
-                </Text>
-              </LinearGradient>
-            </Pressable>
+            {Platform.OS !== "web" && !hasPin && !(hasBiometrics && biometricsEnabled) ? (
+              <Pressable onPress={handleConsentConfirm} style={{ flex: 1 }}>
+                <LinearGradient colors={["#E53535", "#C42B2B"]} style={styles.approveBtn}>
+                  <Feather name="alert-triangle" size={18} color="#fff" />
+                  <Text style={styles.approveBtnText}>Configurar PIN</Text>
+                </LinearGradient>
+              </Pressable>
+            ) : (
+              <Pressable onPress={handleConsentConfirm} disabled={approving} style={{ flex: 1 }}>
+                <LinearGradient colors={["#22C55E", "#16A34A"]} style={styles.approveBtn}>
+                  <Feather name="lock" size={18} color="#fff" />
+                  <Text style={styles.approveBtnText}>
+                    {hasBiometrics && biometricsEnabled ? "Confirmar con biometría" : "Confirmar con PIN"}
+                  </Text>
+                </LinearGradient>
+              </Pressable>
+            )}
           </View>
         </View>
       );
@@ -988,6 +1019,11 @@ const styles = StyleSheet.create({
   },
   approveBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#fff" },
 
+  noAuthWarning: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    padding: 12, borderRadius: Radii.lg, borderWidth: 1, marginBottom: 12,
+  },
+  noAuthWarningText: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#E53535", flex: 1, lineHeight: 17 },
   bioRetryBtn: { paddingVertical: 12, paddingHorizontal: 32, borderRadius: Radii.pill, borderWidth: 1.5, marginBottom: 16 },
   bioRetryText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   switchMethod: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 8 },
