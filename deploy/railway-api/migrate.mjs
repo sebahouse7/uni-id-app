@@ -196,6 +196,13 @@ CREATE INDEX IF NOT EXISTS idx_security_events_severity ON public.uni_security_e
 
 CREATE INDEX IF NOT EXISTS idx_users_email_hash ON public.uni_users USING btree (recovery_email_hash);
 CREATE INDEX IF NOT EXISTS idx_user_keys_user ON public.uni_user_keys USING btree (user_id);
+
+-- Add global_id column if missing (safe to re-run)
+ALTER TABLE public.uni_users ADD COLUMN IF NOT EXISTS global_id text;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_global_id ON public.uni_users (global_id) WHERE global_id IS NOT NULL;
+
+-- Assign a real did:uniid UUID to every existing user that doesn't have one
+UPDATE public.uni_users SET global_id = 'did:uniid:' || gen_random_uuid()::text WHERE global_id IS NULL OR global_id = '';
 `;
 
 async function migrate() {

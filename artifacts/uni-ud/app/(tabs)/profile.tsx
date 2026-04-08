@@ -37,7 +37,7 @@ export default function ProfileScreen() {
   const [name, setName] = useState(node?.name ?? "");
   const [bio, setBio] = useState(node?.bio ?? "");
   const [saving, setSaving] = useState(false);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any[] | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
   const [showPINChange, setShowPINChange] = useState(false);
   const [pinOld, setPinOld] = useState("");
@@ -46,7 +46,7 @@ export default function ProfileScreen() {
   const [changingPIN, setChangingPIN] = useState(false);
 
   useEffect(() => {
-    apiGetSessions().then(setSessions).catch(() => {});
+    apiGetSessions().then(setSessions).catch(() => setSessions([]));
   }, []);
 
   const handlePickPhoto = async () => {
@@ -465,7 +465,7 @@ export default function ProfileScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Sesiones activas</Text>
             <Text style={[styles.infoValue, { color: colors.text }]}>
-              {sessions.length > 0 ? `${sessions.length} dispositivo${sessions.length !== 1 ? "s" : ""}` : "Cargando..."}
+              {sessions === null ? "Cargando..." : sessions.length > 0 ? `${sessions.length} dispositivo${sessions.length !== 1 ? "s" : ""}` : "Sin sesiones activas"}
             </Text>
           </View>
         </View>
