@@ -219,6 +219,11 @@ CREATE TABLE IF NOT EXISTS public.uni_access_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_access_requests_token ON public.uni_access_requests USING btree (share_token_id);
 CREATE INDEX IF NOT EXISTS idx_access_requests_owner ON public.uni_access_requests USING btree (owner_user_id, status);
+
+-- Extend uni_access_requests for consent, shared data, and revocation tracking
+ALTER TABLE public.uni_access_requests ADD COLUMN IF NOT EXISTS consented_at timestamptz;
+ALTER TABLE public.uni_access_requests ADD COLUMN IF NOT EXISTS shared_data jsonb;
+ALTER TABLE public.uni_access_requests ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
 `;
 
 async function migrate() {

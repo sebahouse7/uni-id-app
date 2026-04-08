@@ -287,7 +287,7 @@ export async function apiShareCreateQr(opts: {
   permissions?: { name?: boolean; globalId?: boolean; bio?: boolean; networkPlan?: boolean };
   expiresInMinutes?: number;
   label?: string;
-}): Promise<{ token: string; qrContent: string; expiresAt: string; expiresInMinutes: number }> {
+}): Promise<{ token: string; qrContent: string; expiresAt: string; expiresInMinutes: number; permissions: any }> {
   const res = await authFetch("/share/create-qr", {
     method: "POST",
     body: JSON.stringify(opts),
@@ -305,8 +305,14 @@ export async function apiShareGetPending(): Promise<any[]> {
   return res.json();
 }
 
-export async function apiShareApprove(requestId: string): Promise<{ ok: boolean; data: any }> {
-  const res = await authFetch(`/share/approve/${requestId}`, { method: "POST" });
+export async function apiShareApprove(
+  requestId: string,
+  opts: { consentConfirmed: boolean }
+): Promise<{ ok: boolean; data: any }> {
+  const res = await authFetch(`/share/approve/${requestId}`, {
+    method: "POST",
+    body: JSON.stringify(opts),
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? "Error al aprobar");
@@ -320,6 +326,20 @@ export async function apiShareReject(requestId: string): Promise<void> {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? "Error al rechazar");
   }
+}
+
+export async function apiShareRevokeAccess(requestId: string): Promise<void> {
+  const res = await authFetch(`/share/revoke-access/${requestId}`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Error al revocar");
+  }
+}
+
+export async function apiShareAccessLog(): Promise<any[]> {
+  const res = await authFetch("/share/access-log");
+  if (!res.ok) return [];
+  return res.json();
 }
 
 export async function apiShareHistory(): Promise<any[]> {
