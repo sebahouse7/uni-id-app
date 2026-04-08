@@ -242,13 +242,20 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
       const docs = await apiGetDocuments();
       setIsOnline(true);
 
+      // Read current local cache to preserve fields the backend might return as null
+      // (e.g. name not yet saved, globalId not assigned yet)
+      const rawLocalNode = await secureGet(CACHE_KEY_NODE).catch(() => null);
+      const localNode: IdentityNode | null = rawLocalNode ? JSON.parse(rawLocalNode) : null;
+
       const backendNode: IdentityNode = {
         id: session.user.id,
-        globalId: session.user.global_id ?? undefined,
-        name: session.user.name,
-        bio: session.user.bio,
-        createdAt: session.user.created_at,
-        networkPlan: session.user.network_plan,
+        // Keep local globalId if backend hasn't assigned one yet
+        globalId: session.user.global_id ?? localNode?.globalId ?? undefined,
+        // Prefer backend name only if it's non-empty; otherwise keep local name
+        name: session.user.name || localNode?.name || "",
+        bio: session.user.bio ?? localNode?.bio,
+        createdAt: session.user.created_at || localNode?.createdAt || new Date().toISOString(),
+        networkPlan: session.user.network_plan ?? localNode?.networkPlan,
       };
       await cacheNode(backendNode);
 
