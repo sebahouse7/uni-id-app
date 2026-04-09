@@ -1,0 +1,289 @@
+Implementación final — HARDENING + RED REAL + BASE DE NEGOCIO
+(NO rompe nada existente, todo es capa adicional)
+
+---
+
+🔐 1. NONCE (ANTI-REPLAY TOTAL)
+
+Extender payload canónico:
+
+ANTES:
+"vote::node_id::target_hash::result::timestamp"
+
+AHORA:
+"vote::node_id::target_hash::result::timestamp::nonce"
+
+---
+
+Generación (cliente)
+
+- nonce = random 16 bytes hex
+- timestamp = Date.now()
+
+---
+
+Validación (backend)
+
+1. verificar firma
+2. verificar ventana tiempo (±60s)
+3. verificar nonce NO usado
+
+---
+
+Almacenamiento (Redis recomendado)
+
+clave:
+nonce:{node_id}:{nonce}
+
+TTL: 120 segundos
+
+---
+
+Regla:
+
+if exists(nonce) → reject ("replay detected")
+
+---
+
+⚡ 2. RATE LIMIT POR NODO
+
+Previene spam incluso con nodos válidos
+
+---
+
+Redis
+
+key:
+ratelimit:{node_id}
+
+---
+
+Lógica:
+
+INCR key
+EXPIRE 60s
+
+if value > 10 → reject ("rate limit exceeded")
+
+---
+
+🌐 3. NODOS FUERA DEL SERVIDOR (RED REAL)
+
+Arquitectura:
+
+- cada usuario = nodo
+- cada nodo tiene:
+  - publicKey
+  - privateKey (SOLO cliente)
+  - node_id = sha256(publicKey)
+
+---
+
+Backend ya NO es autoridad
+
+solo:
+
+- valida firmas
+- agrega votos
+- calcula consenso
+
+---
+
+Resultado:
+
+👉 la verdad = red + criptografía
+NO el servidor
+
+---
+
+🔑 4. FIRMA EN CLIENTE (NO CUSTODIA)
+
+Clave privada:
+
+- generada en dispositivo
+- almacenada en:
+  - Android Keystore / iOS Secure Enclave
+
+---
+
+NUNCA:
+
+- enviar privateKey
+- guardar en backend
+
+---
+
+Flujo:
+
+1. backend da payload
+2. cliente firma local (Ed25519)
+3. envía signature
+
+---
+
+💰 5. ECONOMÍA (STAKING + SLASHING)
+
+(opcional pero clave para monetizar fuerte)
+
+---
+
+Nuevo campo en nodo:
+
+stake: float
+
+---
+
+Reglas:
+
+Para votar:
+
+- stake mínimo: 1.0
+
+---
+
+Recompensa:
+
+si vota con consenso:
+
++0.02 stake
+
+---
+
+Penalización (slashing):
+
+si vota contra consenso fuerte:
+
+- penalty (ya implementado)
+- -0.05 stake adicional
+
+---
+
+Si stake = 0:
+
+→ nodo pierde capacidad de votar
+
+---
+
+🧠 6. SCORE FINAL (YA EXISTENTE + ECONOMÍA)
+
+score sigue:
+
+Σ weight_valid - Σ weight_invalid
+
+pero ahora:
+
+weight influenciado por stake
+
+---
+
+Ejemplo:
+
+weight = base_weight * (1 + log(stake + 1))
+
+---
+
+🏗️ 7. ENDPOINTS NUEVOS
+
+---
+
+POST /node/register
+
+→ genera node_id desde publicKey
+
+---
+
+GET /node/me
+
+→ devuelve:
+{
+node_id,
+reputation,
+stake,
+age,
+weight
+}
+
+---
+
+POST /stake/add
+POST /stake/withdraw
+
+---
+
+📊 8. RESULTADO FINAL API
+
+GET /verify/result/:hash
+
+{
+"result": "valid",
+"score": 9.1,
+"confidence": 1.0,
+"trusted_nodes": 4,
+"votes": {...},
+"economic_security": "high"
+}
+
+---
+
+🚀 9. PRODUCTO REAL (LO IMPORTANTE)
+
+Esto ahora es vendible como:
+
+---
+
+🧾 CASO 1 — VALIDACIÓN DE DOCUMENTOS
+
+- contratos
+- identidad
+- certificados
+
+👉 empresas pagan por verificación
+
+---
+
+🧠 CASO 2 — REPUTACIÓN DIGITAL
+
+- perfiles verificables
+- scoring descentralizado
+
+---
+
+🔐 CASO 3 — CAPA DE CONFIANZA API
+
+SaaS:
+
+"verificá cualquier dato con consenso"
+
+---
+
+💵 MODELO
+
+- pago por verificación
+- suscripción API
+- fee por staking
+
+---
+
+🧠 RESUMEN FINAL
+
+Tenés ahora:
+
+- criptografía real
+- anti-replay completo
+- anti-spam
+- consenso ponderado
+- nodos independientes
+- economía
+
+---
+
+👉 Esto ya NO es una app
+👉 es un PROTOCOLO
+
+---
+
+LISTO PARA:
+
+- escalar
+- vender
+- convertir en empresa

@@ -51,6 +51,7 @@ ALTER TABLE public.identity_nodes ADD COLUMN IF NOT EXISTS node_id text;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_identity_nodes_node_id ON public.identity_nodes (node_id) WHERE node_id IS NOT NULL;
 ALTER TABLE public.identity_nodes ADD COLUMN IF NOT EXISTS node_reputation double precision DEFAULT 1.0;
 ALTER TABLE public.identity_nodes ADD COLUMN IF NOT EXISTS last_verified_at timestamp with time zone;
+ALTER TABLE public.identity_nodes ADD COLUMN IF NOT EXISTS stake double precision DEFAULT 0 NOT NULL;
 CREATE TABLE IF NOT EXISTS public.node_endorsements (id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,from_node_id text NOT NULL,to_node_id text NOT NULL,from_user_id uuid REFERENCES public.uni_users(id) ON DELETE CASCADE,to_user_id uuid REFERENCES public.uni_users(id) ON DELETE CASCADE,signature text NOT NULL,canonical_payload text NOT NULL,reputation_applied double precision DEFAULT 0 NOT NULL,created_at timestamp with time zone DEFAULT now() NOT NULL,CONSTRAINT node_endorsements_unique UNIQUE (from_node_id, to_node_id));
 CREATE INDEX IF NOT EXISTS idx_endorsements_to ON public.node_endorsements USING btree (to_node_id);
 CREATE INDEX IF NOT EXISTS idx_endorsements_from ON public.node_endorsements USING btree (from_node_id);
@@ -74,6 +75,26 @@ CREATE TABLE IF NOT EXISTS public.verification_votes (
 CREATE INDEX IF NOT EXISTS idx_verification_votes_hash ON public.verification_votes USING btree (target_hash);
 CREATE INDEX IF NOT EXISTS idx_verification_votes_node ON public.verification_votes USING btree (node_id);
 ALTER TABLE public.verification_votes ADD COLUMN IF NOT EXISTS timestamp_ms bigint DEFAULT 0 NOT NULL;
+ALTER TABLE public.verification_votes ADD COLUMN IF NOT EXISTS nonce text DEFAULT '' NOT NULL;
+CREATE TABLE IF NOT EXISTS public.used_nonces (
+  node_id text NOT NULL,
+  nonce text NOT NULL,
+  expires_at timestamp with time zone NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  PRIMARY KEY (node_id, nonce)
+);
+CREATE INDEX IF NOT EXISTS idx_used_nonces_expires ON public.used_nonces USING btree (expires_at);
+CREATE TABLE IF NOT EXISTS public.stake_transactions (
+  id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES public.uni_users(id) ON DELETE CASCADE,
+  node_id text,
+  type text NOT NULL CHECK (type IN ('add','withdraw','reward','slash')),
+  amount double precision NOT NULL,
+  balance_after double precision NOT NULL,
+  reason text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_stake_txn_user ON public.stake_transactions USING btree (user_id, created_at DESC);
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_token text;
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_timestamp timestamp with time zone;
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_status text DEFAULT 'none';
