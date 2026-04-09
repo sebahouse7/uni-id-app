@@ -58,6 +58,20 @@ CREATE TABLE IF NOT EXISTS public.agent_events (id bigint GENERATED ALWAYS AS ID
 CREATE INDEX IF NOT EXISTS idx_agent_events_user ON public.agent_events USING btree (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_agent_events_node ON public.agent_events USING btree (node_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_agent_events_type ON public.agent_events USING btree (event_type, created_at DESC);
+CREATE TABLE IF NOT EXISTS public.verification_votes (
+  id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+  node_id text NOT NULL,
+  target_hash text NOT NULL,
+  result text NOT NULL CHECK (result IN ('valid','invalid')),
+  signature text NOT NULL,
+  canonical_payload text NOT NULL,
+  weight double precision DEFAULT 0 NOT NULL,
+  penalty_applied boolean DEFAULT false NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT verification_votes_unique UNIQUE (node_id, target_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_verification_votes_hash ON public.verification_votes USING btree (target_hash);
+CREATE INDEX IF NOT EXISTS idx_verification_votes_node ON public.verification_votes USING btree (node_id);
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_token text;
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_timestamp timestamp with time zone;
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_status text DEFAULT 'none';
