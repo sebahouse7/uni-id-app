@@ -18,22 +18,16 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { PaywallGate } from "@/components/ui/PaywallGate";
 import Colors from "@/constants/colors";
 import { CATEGORIES, DocumentCategory, useIdentity } from "@/context/IdentityContext";
 import { newVaultId, vaultEncryptFile } from "@/lib/fileVault";
-
-const FREE_DOC_LIMIT = 3;
 
 export default function AddDocumentScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { addDocument, documents, node } = useIdentity();
-
-  const isFree = !node?.networkPlan || node.networkPlan === "free";
-  const isAtLimit = isFree && documents.length >= FREE_DOC_LIMIT;
+  const { addDocument } = useIdentity();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -201,14 +195,6 @@ export default function AddDocumentScreen() {
         </Pressable>
       </View>
 
-      {isAtLimit ? (
-        <PaywallGate
-          limitReached
-          currentCount={documents.length}
-          maxCount={FREE_DOC_LIMIT}
-          feature="documentos adicionales"
-        />
-      ) : (
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
@@ -347,7 +333,6 @@ export default function AddDocumentScreen() {
           </Pressable>
         </View>
       </ScrollView>
-      )}
     </View>
   );
 }
