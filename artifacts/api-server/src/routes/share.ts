@@ -60,7 +60,7 @@ router.post("/create-qr", requireAuth, createQrLimiter, async (req: Request, res
 
   res.json({
     token,
-    qrContent: `uniid://access?token=${token}`,
+    qrContent: `https://expressjs-production-8bfc.up.railway.app/uni-web/shared/${token}`,
     expiresAt: expiresAt.toISOString(),
     expiresInMinutes: mins,
     permissions,
