@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import * as Sharing from "expo-sharing";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Alert,
   Modal,
@@ -23,22 +23,17 @@ import { CATEGORIES, useIdentity } from "@/context/IdentityContext";
 import {
   isVaultUri,
   parseVaultId,
-  vaultDecryptToTemp,
-  cleanTempFile,
+  vaultDecryptToMemory,
+  vaultShareFile,
 } from "@/lib/fileVault";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
 const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|bmp|heic|avif)$/i;
 
-function isImageUri(uri?: string, fileName?: string): boolean {
-  if (!uri) return false;
-  if (IMAGE_EXTS.test(uri)) return true;
-  if (uri.startsWith("data:image/")) return true;
-  // content:// or file:// URIs without extension — check fileName
+function isImageFile(fileName?: string, mimeType?: string): boolean {
+  if (mimeType && mimeType.startsWith("image/")) return true;
   if (fileName && IMAGE_EXTS.test(fileName)) return true;
-  // Android content:// URIs from gallery are almost always images
-  if (uri.startsWith("content://media/")) return true;
   return false;
 }
 
@@ -51,33 +46,36 @@ export default function DocumentDetailScreen() {
   const { documents, deleteDocument } = useIdentity();
   const [deleting, setDeleting] = useState(false);
   const [imgModalVisible, setImgModalVisible] = useState(false);
-  const [imgZoom, setImgZoom] = useState(1);
-  const [tempFileUri, setTempFileUri] = useState<string | null>(null);
+  const [decryptedDataUri, setDecryptedDataUri] = useState<string | null>(null);
+  const [decryptedMime, setDecryptedMime] = useState<string | undefined>();
   const [decrypting, setDecrypting] = useState(false);
-  const vaultIdRef = useRef<string | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   const doc = documents.find((d) => String(d.id) === String(id));
   const cat = doc ? CATEGORIES.find((c) => c.key === doc.category) : null;
 
-  const displayUri = tempFileUri ?? (doc?.fileUri && !isVaultUri(doc.fileUri) ? doc.fileUri : undefined);
-  const hasImage = isImageUri(displayUri, doc?.fileName);
+  const isVault = !!doc?.fileUri && isVaultUri(doc.fileUri);
+  const vaultId = isVault ? parseVaultId(doc!.fileUri!) : null;
+  const hasImage = isImageFile(doc?.fileName, decryptedMime);
 
   useEffect(() => {
-    if (!doc?.fileUri || !isVaultUri(doc.fileUri)) return;
-    const vid = parseVaultId(doc.fileUri);
-    if (!vid) return;
-    vaultIdRef.current = vid;
+    if (!vaultId || !doc?.fileUri) return;
+    let cancelled = false;
     setDecrypting(true);
-    vaultDecryptToTemp(vid, doc.fileName).then((uri) => {
-      setTempFileUri(uri);
-    }).catch(() => {}).finally(() => setDecrypting(false));
-
-    return () => {
-      if (vaultIdRef.current) {
-        cleanTempFile(vaultIdRef.current).catch(() => {});
-      }
-    };
-  }, [doc?.fileUri]);
+    vaultDecryptToMemory(vaultId, doc.fileName)
+      .then((result) => {
+        if (cancelled) return;
+        if (result) {
+          setDecryptedDataUri(result.dataUri);
+          setDecryptedMime(result.mimeType);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setDecrypting(false);
+      });
+    return () => { cancelled = true; };
+  }, [vaultId, doc?.fileUri]);
 
   if (!doc) {
     return (
@@ -112,19 +110,31 @@ export default function DocumentDetailScreen() {
     );
   };
 
-  const handleShare = async () => {
-    if (!displayUri) return;
+  const handleShare = useCallback(async () => {
+    if (!vaultId) return;
     try {
+      setSharing(true);
       const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(displayUri, { dialogTitle: doc.title });
-      } else {
+      if (!canShare) {
         Alert.alert("Compartir no disponible", "Tu dispositivo no soporta compartir archivos.");
+        return;
+      }
+      const shareResult = await vaultShareFile(vaultId, doc.fileName);
+      if (!shareResult) {
+        Alert.alert("Error", "No se pudo descifrar el archivo para compartir.");
+        return;
+      }
+      try {
+        await Sharing.shareAsync(shareResult.tempPath, { dialogTitle: doc.title });
+      } finally {
+        await shareResult.cleanup();
       }
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "No se pudo compartir el archivo");
+    } finally {
+      setSharing(false);
     }
-  };
+  }, [vaultId, doc?.fileName, doc?.title]);
 
   const infoRows = [
     { label: "Categoría", value: cat?.label ?? "—", icon: cat?.icon ?? "folder" },
@@ -173,11 +183,11 @@ export default function DocumentDetailScreen() {
           {doc.title}
         </Text>
         <View style={{ flexDirection: "row", gap: 4 }}>
-          {(doc.fileUri) && (
+          {isVault && (
             <Pressable
               onPress={handleShare}
-              disabled={!displayUri}
-              style={({ pressed }) => [styles.headerBtn, { opacity: (pressed || !displayUri) ? 0.4 : 1 }]}
+              disabled={sharing || decrypting}
+              style={({ pressed }) => [styles.headerBtn, { opacity: (pressed || sharing || decrypting) ? 0.4 : 1 }]}
             >
               <Feather name="share-2" size={20} color={colors.tint} />
             </Pressable>
@@ -215,19 +225,19 @@ export default function DocumentDetailScreen() {
         {decrypting && (
           <View style={[styles.decryptingBadge, { backgroundColor: colors.backgroundCard, borderColor: colors.tint + "40" }]}>
             <Feather name="lock" size={14} color={colors.tint} />
-            <Text style={[styles.decryptingText, { color: colors.tint }]}>Descifrando archivo...</Text>
+            <Text style={[styles.decryptingText, { color: colors.tint }]}>Descifrando en memoria...</Text>
           </View>
         )}
 
-        {/* ── Image Preview ── */}
-        {hasImage && displayUri && (
+        {/* ── Image Preview (data: URI — never a plaintext file on disk) ── */}
+        {hasImage && decryptedDataUri && (
           <Pressable
             onPress={() => setImgModalVisible(true)}
             style={({ pressed }) => ({ opacity: pressed ? 0.95 : 1 })}
           >
             <View style={[styles.imageCard, { borderColor: colors.border, backgroundColor: colors.backgroundCard }]}>
               <Image
-                source={{ uri: displayUri }}
+                source={{ uri: decryptedDataUri }}
                 style={styles.previewImage}
                 contentFit="cover"
                 transition={200}
@@ -242,11 +252,11 @@ export default function DocumentDetailScreen() {
           </Pressable>
         )}
 
-        {/* ── File badge + open button (for non-image files) ── */}
-        {doc.fileUri && !hasImage && (
+        {/* ── File badge (non-image) ── */}
+        {isVault && !hasImage && (
           <Pressable
-            onPress={displayUri ? handleShare : undefined}
-            style={({ pressed }) => ({ opacity: (pressed || !displayUri) ? 0.5 : 1 })}
+            onPress={decrypting || sharing ? undefined : handleShare}
+            style={({ pressed }) => ({ opacity: (pressed || decrypting || sharing) ? 0.5 : 1 })}
           >
             <View style={[styles.fileBadge, { backgroundColor: colors.backgroundCard, borderColor: accentColor + "50" }]}>
               <View style={[styles.fileIconCircle, { backgroundColor: accentColor + "18" }]}>
@@ -257,10 +267,14 @@ export default function DocumentDetailScreen() {
                   {doc.fileName ?? "Archivo adjunto"}
                 </Text>
                 <Text style={[styles.fileOpenHint, { color: accentColor }]}>
-                  {decrypting ? "Descifrando..." : displayUri ? "Tocá para abrir o compartir" : "Archivo cifrado en este dispositivo"}
+                  {decrypting
+                    ? "Descifrando en memoria..."
+                    : sharing
+                    ? "Preparando para compartir..."
+                    : "Tocá para compartir"}
                 </Text>
               </View>
-              <Feather name="external-link" size={18} color={accentColor} />
+              <Feather name="share-2" size={18} color={accentColor} />
             </View>
           </Pressable>
         )}
@@ -290,22 +304,24 @@ export default function DocumentDetailScreen() {
         <View style={[styles.securityNote, { backgroundColor: colors.backgroundCard, borderColor: colors.border }]}>
           <Feather name="lock" size={16} color={colors.tint} />
           <Text style={[styles.securityText, { color: colors.textSecondary }]}>
-            Almacenado en tu nodo de identidad · Cifrado AES-256
+            Cifrado AES-256-GCM · Clave derivada del PIN del dispositivo · Nunca en texto plano
           </Text>
         </View>
 
-        {/* ── Actions ── */}
-        {doc.fileUri && (
+        {/* ── Share action ── */}
+        {isVault && (
           <Pressable
             onPress={handleShare}
-            disabled={!displayUri}
+            disabled={sharing || decrypting}
             style={({ pressed }) => [
               styles.actionBtn,
-              { backgroundColor: colors.tint + "12", borderColor: colors.tint + "40", opacity: (pressed || !displayUri) ? 0.4 : 1 },
+              { backgroundColor: colors.tint + "12", borderColor: colors.tint + "40", opacity: (pressed || sharing || decrypting) ? 0.4 : 1 },
             ]}
           >
             <Feather name="share-2" size={18} color={colors.tint} />
-            <Text style={[styles.actionBtnText, { color: colors.tint }]}>Compartir documento</Text>
+            <Text style={[styles.actionBtnText, { color: colors.tint }]}>
+              {sharing ? "Compartiendo..." : "Compartir documento"}
+            </Text>
           </Pressable>
         )}
 
@@ -325,7 +341,7 @@ export default function DocumentDetailScreen() {
       </ScrollView>
 
       {/* ── Image Modal (zoom viewer) ── */}
-      {hasImage && displayUri && (
+      {hasImage && decryptedDataUri && (
         <Modal
           visible={imgModalVisible}
           animationType="fade"
@@ -350,7 +366,7 @@ export default function DocumentDetailScreen() {
               style={{ flex: 1 }}
             >
               <Image
-                source={{ uri: displayUri }}
+                source={{ uri: decryptedDataUri }}
                 style={{ width: SCREEN_W, height: SCREEN_H * 0.85 }}
                 contentFit="contain"
               />
@@ -521,14 +537,4 @@ const styles = StyleSheet.create({
   },
   notFound: { fontSize: 16, fontFamily: "Inter_500Medium", marginBottom: 12 },
   back: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  deleteBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  deleteBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });

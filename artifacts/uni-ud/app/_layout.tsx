@@ -21,7 +21,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { IdentityProvider } from "@/context/IdentityContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { NetworkProvider } from "@/context/NetworkContext";
-import { cleanAllTempFiles } from "@/lib/fileVault";
+import { cleanShareTemps, migrateOldVaultFiles } from "@/lib/fileVault";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -29,6 +29,12 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      migrateOldVaultFiles().catch(() => {});
+    }
+  }, [isAuthenticated]);
 
   if (isLoading) {
     return null;
@@ -62,7 +68,7 @@ export default function RootLayout() {
   const [appReady, setAppReady]     = useState(false);
 
   useEffect(() => {
-    cleanAllTempFiles().catch(() => {});
+    cleanShareTemps().catch(() => {});
   }, []);
 
   useEffect(() => {
