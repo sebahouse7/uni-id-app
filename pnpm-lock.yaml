@@ -373,12 +373,15 @@ importers:
 
   artifacts/uni-ud:
     dependencies:
+      '@noble/ciphers':
+        specifier: ^2.1.1
+        version: 2.1.1
       expo-clipboard:
         specifier: ^8.0.8
         version: 8.0.8(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       expo-crypto:
-        specifier: ~14.0.2
-        version: 14.0.2(expo@54.0.33)
+        specifier: ~15.0.8
+        version: 15.0.8(expo@54.0.33)
       expo-document-picker:
         specifier: ^14.0.8
         version: 14.0.8(expo@54.0.33)
@@ -1826,6 +1829,10 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@noble/ciphers@2.1.1':
+    resolution: {integrity: sha512-bysYuiVfhxNJuldNXlFEitTVdNnYUc+XNJZd7Qm2a5j1vZHgY+fazadNFWFaMK/2vye0JVlxV3gHmC0WDfAOQw==}
+    engines: {node: '>= 20.19.0'}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -4037,8 +4044,8 @@ packages:
       expo: '*'
       react-native: '*'
 
-  expo-crypto@14.0.2:
-    resolution: {integrity: sha512-WRc9PBpJraJN29VD5Ef7nCecxJmZNyRKcGkNiDQC1nhY5agppzwhqh7zEzNFarE/GqDgSiaDHS8yd5EgFhP9AQ==}
+  expo-crypto@15.0.8:
+    resolution: {integrity: sha512-aF7A914TB66WIlTJvl5J6/itejfY78O7dq3ibvFltL9vnTALJ/7LYHvLT4fwmx9yUNS6ekLBtDGWivFWnj2Fcw==}
     peerDependencies:
       expo: '*'
 
@@ -7912,6 +7919,8 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@noble/ciphers@2.1.1': {}
+
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
       '@nodelib/fs.stat': 2.0.5
@@ -10459,7 +10468,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  expo-crypto@14.0.2(expo@54.0.33):
+  expo-crypto@15.0.8(expo@54.0.33):
     dependencies:
       base64-js: 1.5.1
       expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)

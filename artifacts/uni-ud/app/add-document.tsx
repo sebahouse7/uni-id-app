@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PaywallGate } from "@/components/ui/PaywallGate";
 import Colors from "@/constants/colors";
 import { CATEGORIES, DocumentCategory, useIdentity } from "@/context/IdentityContext";
+import { newVaultId, vaultEncryptFile } from "@/lib/fileVault";
 
 const FREE_DOC_LIMIT = 3;
 
@@ -40,6 +41,20 @@ export default function AddDocumentScreen() {
   const [fileName, setFileName] = useState<string | undefined>();
   const [fileUri, setFileUri] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
+  const [encrypting, setEncrypting] = useState(false);
+
+  const encryptAndAttach = async (rawUri: string, name: string) => {
+    setEncrypting(true);
+    try {
+      const vaultUri = await vaultEncryptFile(rawUri, newVaultId());
+      setFileName(name);
+      setFileUri(vaultUri);
+    } catch {
+      Alert.alert("Error de seguridad", "No se pudo cifrar el archivo. Intentá de nuevo.");
+    } finally {
+      setEncrypting(false);
+    }
+  };
 
   const handleCamera = async () => {
     try {
@@ -56,9 +71,8 @@ export default function AddDocumentScreen() {
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         const name = `foto_${Date.now()}.jpg`;
-        setFileName(name);
-        setFileUri(asset.uri);
         if (!title) setTitle(`Foto ${new Date().toLocaleDateString()}`);
+        await encryptAndAttach(asset.uri, name);
       }
     } catch {
       Alert.alert("Error", "No se pudo acceder a la cámara.");
@@ -80,9 +94,8 @@ export default function AddDocumentScreen() {
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         const name = asset.fileName ?? `imagen_${Date.now()}.jpg`;
-        setFileName(name);
-        setFileUri(asset.uri);
         if (!title) setTitle(name.replace(/\.[^/.]+$/, ""));
+        await encryptAndAttach(asset.uri, name);
       }
     } catch {
       Alert.alert("Error", "No se pudo abrir la galería.");
@@ -96,9 +109,9 @@ export default function AddDocumentScreen() {
         copyToCacheDirectory: true,
       });
       if (!result.canceled && result.assets[0]) {
-        setFileName(result.assets[0].name);
-        setFileUri(result.assets[0].uri);
-        if (!title) setTitle(result.assets[0].name.replace(/\.[^/.]+$/, ""));
+        const name = result.assets[0].name;
+        if (!title) setTitle(name.replace(/\.[^/.]+$/, ""));
+        await encryptAndAttach(result.assets[0].uri, name);
       }
     } catch {
       Alert.alert("Error", "No se pudo seleccionar el archivo.");
@@ -173,16 +186,18 @@ export default function AddDocumentScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Nuevo documento</Text>
         <Pressable
           onPress={handleSave}
-          disabled={saving || !title.trim()}
+          disabled={saving || encrypting || !title.trim()}
           style={({ pressed }) => [
             styles.saveBtn,
             {
-              backgroundColor: !title.trim() ? colors.border : colors.tint,
+              backgroundColor: (!title.trim() || encrypting) ? colors.border : colors.tint,
               opacity: pressed ? 0.85 : 1,
             },
           ]}
         >
-          <Text style={styles.saveBtnText}>{saving ? "Guardando..." : "Guardar"}</Text>
+          <Text style={styles.saveBtnText}>
+            {encrypting ? "Cifrando..." : saving ? "Guardando..." : "Guardar"}
+          </Text>
         </Pressable>
       </View>
 
@@ -283,7 +298,7 @@ export default function AddDocumentScreen() {
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>Archivo adjunto (opcional)</Text>
           <Pressable
-            onPress={handleAttach}
+            onPress={encrypting ? undefined : handleAttach}
             style={({ pressed }) => [
               styles.filePicker,
               {
@@ -294,9 +309,9 @@ export default function AddDocumentScreen() {
             ]}
           >
             <Feather
-              name={fileName ? "file-text" : "upload"}
+              name={encrypting ? "lock" : fileName ? "file-text" : "upload"}
               size={22}
-              color={fileName ? (selectedCat?.color ?? colors.tint) : colors.textSecondary}
+              color={encrypting ? colors.tint : fileName ? (selectedCat?.color ?? colors.tint) : colors.textSecondary}
             />
             <View style={{ flex: 1 }}>
               <Text
@@ -306,15 +321,20 @@ export default function AddDocumentScreen() {
                 ]}
                 numberOfLines={1}
               >
-                {fileName ?? "Seleccionar archivo"}
+                {encrypting ? "Cifrando archivo..." : fileName ?? "Seleccionar archivo"}
               </Text>
-              {!fileName && (
+              {!fileName && !encrypting && (
                 <Text style={[styles.filePickerSub, { color: colors.textSecondary }]}>
                   PDF, imagen, Word, etc.
                 </Text>
               )}
+              {fileName && !encrypting && (
+                <Text style={[styles.filePickerSub, { color: colors.tint }]}>
+                  Cifrado AES-256
+                </Text>
+              )}
             </View>
-            {fileName && (
+            {fileName && !encrypting && (
               <Pressable
                 onPress={() => {
                   setFileName(undefined);

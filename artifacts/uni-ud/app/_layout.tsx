@@ -21,6 +21,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { IdentityProvider } from "@/context/IdentityContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { NetworkProvider } from "@/context/NetworkContext";
+import { cleanAllTempFiles } from "@/lib/fileVault";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -59,6 +60,10 @@ export default function RootLayout() {
 
   const [showSplash, setShowSplash] = useState(true);
   const [appReady, setAppReady]     = useState(false);
+
+  useEffect(() => {
+    cleanAllTempFiles().catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {

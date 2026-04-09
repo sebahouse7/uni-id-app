@@ -58,8 +58,9 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@noble/ciphers": "^2.1.1",
     "expo-clipboard": "^8.0.8",
-    "expo-crypto": "~14.0.2",
+    "expo-crypto": "~15.0.8",
     "expo-document-picker": "^14.0.8",
     "expo-file-system": "^19.0.21",
     "expo-local-authentication": "17.0.8",

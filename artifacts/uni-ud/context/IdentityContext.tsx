@@ -8,7 +8,6 @@ import React, {
 } from "react";
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   apiRegister,
   apiCheckSession,
@@ -19,6 +18,7 @@ import {
   apiDeleteDocument,
 } from "../lib/apiClient";
 import { secureGet, secureSet, secureDelete } from "./SecureStorage";
+import { isVaultUri, parseVaultId, vaultDeleteEntry } from "@/lib/fileVault";
 
 export type DocumentCategory =
   | "identity"
@@ -184,7 +184,7 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
           secureGet(CACHE_KEY_NODE).catch(() => null),
           secureGet(CACHE_KEY_DOCS).catch(() => null),
           getOrCreateDeviceId().catch(() => null),
-          AsyncStorage.getItem(AVATAR_URI_KEY).catch(() => null),
+          secureGet(AVATAR_URI_KEY).catch(() => null),
         ]);
         if (rawNode) setNode(JSON.parse(rawNode));
         if (rawDocs) setDocuments(JSON.parse(rawDocs));
@@ -204,9 +204,9 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
   const setAvatarUri = useCallback(async (uri: string | null) => {
     setAvatarUriState(uri);
     if (uri) {
-      await AsyncStorage.setItem(AVATAR_URI_KEY, uri).catch(() => {});
+      await secureSet(AVATAR_URI_KEY, uri).catch(() => {});
     } else {
-      await AsyncStorage.removeItem(AVATAR_URI_KEY).catch(() => {});
+      await secureDelete(AVATAR_URI_KEY).catch(() => {});
     }
   }, []);
 
@@ -404,8 +404,13 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
   }, [documents, isOnline]);
 
   const deleteDocument = useCallback(async (id: string) => {
+    const doc = documents.find((d) => d.id === id);
     if (isOnline && !id.startsWith("local-")) {
       await apiDeleteDocument(id);
+    }
+    if (doc?.fileUri && isVaultUri(doc.fileUri)) {
+      const vaultId = parseVaultId(doc.fileUri);
+      if (vaultId) vaultDeleteEntry(vaultId).catch(() => {});
     }
     await cacheDocs(documents.filter((d) => d.id !== id));
   }, [documents, isOnline]);

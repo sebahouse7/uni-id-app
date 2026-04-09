@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import * as Sharing from "expo-sharing";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Alert,
   Modal,
@@ -20,6 +20,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { CATEGORIES, useIdentity } from "@/context/IdentityContext";
+import {
+  isVaultUri,
+  parseVaultId,
+  vaultDecryptToTemp,
+  cleanTempFile,
+} from "@/lib/fileVault";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
@@ -46,10 +52,32 @@ export default function DocumentDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [imgModalVisible, setImgModalVisible] = useState(false);
   const [imgZoom, setImgZoom] = useState(1);
+  const [tempFileUri, setTempFileUri] = useState<string | null>(null);
+  const [decrypting, setDecrypting] = useState(false);
+  const vaultIdRef = useRef<string | null>(null);
 
   const doc = documents.find((d) => String(d.id) === String(id));
   const cat = doc ? CATEGORIES.find((c) => c.key === doc.category) : null;
-  const hasImage = isImageUri(doc?.fileUri, doc?.fileName);
+
+  const displayUri = tempFileUri ?? (doc?.fileUri && !isVaultUri(doc.fileUri) ? doc.fileUri : undefined);
+  const hasImage = isImageUri(displayUri, doc?.fileName);
+
+  useEffect(() => {
+    if (!doc?.fileUri || !isVaultUri(doc.fileUri)) return;
+    const vid = parseVaultId(doc.fileUri);
+    if (!vid) return;
+    vaultIdRef.current = vid;
+    setDecrypting(true);
+    vaultDecryptToTemp(vid, doc.fileName).then((uri) => {
+      setTempFileUri(uri);
+    }).catch(() => {}).finally(() => setDecrypting(false));
+
+    return () => {
+      if (vaultIdRef.current) {
+        cleanTempFile(vaultIdRef.current).catch(() => {});
+      }
+    };
+  }, [doc?.fileUri]);
 
   if (!doc) {
     return (
@@ -85,11 +113,11 @@ export default function DocumentDetailScreen() {
   };
 
   const handleShare = async () => {
-    if (!doc.fileUri) return;
+    if (!displayUri) return;
     try {
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(doc.fileUri, { dialogTitle: doc.title });
+        await Sharing.shareAsync(displayUri, { dialogTitle: doc.title });
       } else {
         Alert.alert("Compartir no disponible", "Tu dispositivo no soporta compartir archivos.");
       }
@@ -145,10 +173,11 @@ export default function DocumentDetailScreen() {
           {doc.title}
         </Text>
         <View style={{ flexDirection: "row", gap: 4 }}>
-          {doc.fileUri && (
+          {(doc.fileUri) && (
             <Pressable
               onPress={handleShare}
-              style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.7 : 1 }]}
+              disabled={!displayUri}
+              style={({ pressed }) => [styles.headerBtn, { opacity: (pressed || !displayUri) ? 0.4 : 1 }]}
             >
               <Feather name="share-2" size={20} color={colors.tint} />
             </Pressable>
@@ -182,15 +211,23 @@ export default function DocumentDetailScreen() {
           ) : null}
         </View>
 
+        {/* ── Decrypting indicator ── */}
+        {decrypting && (
+          <View style={[styles.decryptingBadge, { backgroundColor: colors.backgroundCard, borderColor: colors.tint + "40" }]}>
+            <Feather name="lock" size={14} color={colors.tint} />
+            <Text style={[styles.decryptingText, { color: colors.tint }]}>Descifrando archivo...</Text>
+          </View>
+        )}
+
         {/* ── Image Preview ── */}
-        {hasImage && doc.fileUri && (
+        {hasImage && displayUri && (
           <Pressable
             onPress={() => setImgModalVisible(true)}
             style={({ pressed }) => ({ opacity: pressed ? 0.95 : 1 })}
           >
             <View style={[styles.imageCard, { borderColor: colors.border, backgroundColor: colors.backgroundCard }]}>
               <Image
-                source={{ uri: doc.fileUri }}
+                source={{ uri: displayUri }}
                 style={styles.previewImage}
                 contentFit="cover"
                 transition={200}
@@ -208,19 +245,19 @@ export default function DocumentDetailScreen() {
         {/* ── File badge + open button (for non-image files) ── */}
         {doc.fileUri && !hasImage && (
           <Pressable
-            onPress={handleShare}
-            style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+            onPress={displayUri ? handleShare : undefined}
+            style={({ pressed }) => ({ opacity: (pressed || !displayUri) ? 0.5 : 1 })}
           >
             <View style={[styles.fileBadge, { backgroundColor: colors.backgroundCard, borderColor: accentColor + "50" }]}>
               <View style={[styles.fileIconCircle, { backgroundColor: accentColor + "18" }]}>
-                <Feather name="file-text" size={22} color={accentColor} />
+                <Feather name={decrypting ? "lock" : "file-text"} size={22} color={accentColor} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.fileNameText, { color: colors.text }]} numberOfLines={1}>
                   {doc.fileName ?? "Archivo adjunto"}
                 </Text>
                 <Text style={[styles.fileOpenHint, { color: accentColor }]}>
-                  Tocá para abrir o compartir
+                  {decrypting ? "Descifrando..." : displayUri ? "Tocá para abrir o compartir" : "Archivo cifrado en este dispositivo"}
                 </Text>
               </View>
               <Feather name="external-link" size={18} color={accentColor} />
@@ -261,9 +298,10 @@ export default function DocumentDetailScreen() {
         {doc.fileUri && (
           <Pressable
             onPress={handleShare}
+            disabled={!displayUri}
             style={({ pressed }) => [
               styles.actionBtn,
-              { backgroundColor: colors.tint + "12", borderColor: colors.tint + "40", opacity: pressed ? 0.8 : 1 },
+              { backgroundColor: colors.tint + "12", borderColor: colors.tint + "40", opacity: (pressed || !displayUri) ? 0.4 : 1 },
             ]}
           >
             <Feather name="share-2" size={18} color={colors.tint} />
@@ -287,7 +325,7 @@ export default function DocumentDetailScreen() {
       </ScrollView>
 
       {/* ── Image Modal (zoom viewer) ── */}
-      {hasImage && doc.fileUri && (
+      {hasImage && displayUri && (
         <Modal
           visible={imgModalVisible}
           animationType="fade"
@@ -312,7 +350,7 @@ export default function DocumentDetailScreen() {
               style={{ flex: 1 }}
             >
               <Image
-                source={{ uri: doc.fileUri }}
+                source={{ uri: displayUri }}
                 style={{ width: SCREEN_W, height: SCREEN_H * 0.85 }}
                 contentFit="contain"
               />
@@ -338,6 +376,19 @@ const styles = StyleSheet.create({
   headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerTitle: { flex: 1, fontSize: 17, fontFamily: "Inter_600SemiBold", textAlign: "center", marginHorizontal: 8 },
   scroll: { padding: 20, gap: 16 },
+  decryptingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  decryptingText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
   hero: {
     borderRadius: 20,
     padding: 28,
