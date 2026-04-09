@@ -260,8 +260,8 @@ export default function SecurityScreen() {
                 {!hasBiometrics
                   ? "No disponible en este dispositivo"
                   : biometricsEnabled
-                  ? "Huella / Face ID activos"
-                  : "Deshabilitado — solo PIN"}
+                  ? "Huella dactilar activa"
+                  : "Deshabilitado — toca para activar"}
               </Text>
             </View>
             <Switch
