@@ -2,24 +2,12 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
 
-import { apiCreateMercadoPagoCheckout } from "./apiClient";
+export const PAYPAL_EMPRESA_URL = "https://www.paypal.com/ncp/payment/7PFQRRDFMF58J";
 
-export type PlanId = "basic" | "pro";
 export type PaymentStatus = "success" | "failure" | "pending" | "cancelled";
 
-export async function createMercadoPagoCheckout(
-  planId: PlanId,
-  _userId: string
-): Promise<{ url: string | null; error?: string }> {
-  // Always use a real HTTPS URL — MP back_urls must be HTTPS, deep links won't work
-  const apiBase = process.env["EXPO_PUBLIC_API_URL"] ?? "https://expressjs-production-8bfc.up.railway.app/api";
-  const backUrl = apiBase.replace(/\/api$/, "");
-  const data = await apiCreateMercadoPagoCheckout(planId, backUrl);
-  const url = data.initPoint ?? data.sandboxInitPoint ?? null;
-  return { url };
-}
-
-export async function openPaymentBrowser(url: string): Promise<PaymentStatus> {
+export async function openPayPalCheckout(): Promise<PaymentStatus> {
+  const url = PAYPAL_EMPRESA_URL;
   try {
     if (Platform.OS === "web") {
       window.open(url, "_blank");
@@ -32,7 +20,10 @@ export async function openPaymentBrowser(url: string): Promise<PaymentStatus> {
     if (result.type === "cancel" || result.type === "dismiss") return "cancelled";
     return "pending";
   } catch {
-    if (Platform.OS !== "web") await Linking.openURL(url);
+    try {
+      await Linking.openURL(url);
+    } catch {
+    }
     return "pending";
   }
 }
