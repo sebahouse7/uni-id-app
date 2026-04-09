@@ -156,6 +156,79 @@ router.get("/keys", requireAuth, async (req: any, res: Response) => {
   });
 });
 
+// ─── Admin security dashboard (internal — requires x-internal-key) ───────────
+router.get("/admin/security-dashboard", async (req, res: Response) => {
+  const apiKey = req.headers["x-internal-key"];
+  if (apiKey !== process.env["INTERNAL_API_KEY"]) {
+    res.status(403).json({ error: "Acceso denegado" });
+    return;
+  }
+
+  const [suspiciousIps, recentCritical, severityCounts, rateLimitHits, totalUsers, totalDocs] = await Promise.all([
+    // Top 10 IPs with most security events in last 24h
+    query<{ ip_address: string; event_count: string; last_seen: string }>(
+      `SELECT ip_address, COUNT(*) AS event_count, MAX(created_at) AS last_seen
+       FROM uni_security_events
+       WHERE created_at >= NOW() - INTERVAL '24 hours'
+         AND ip_address IS NOT NULL
+       GROUP BY ip_address
+       ORDER BY event_count DESC
+       LIMIT 10`
+    ),
+    // Last 50 critical/high events
+    query<{ event_type: string; severity: string; ip_address: string; metadata: any; created_at: string }>(
+      `SELECT event_type, severity, ip_address, metadata, created_at
+       FROM uni_security_events
+       WHERE severity IN ('critical','high')
+         AND created_at >= NOW() - INTERVAL '24 hours'
+       ORDER BY created_at DESC
+       LIMIT 50`
+    ),
+    // Event counts by severity in last 24h
+    query<{ severity: string; count: string }>(
+      `SELECT severity, COUNT(*) AS count
+       FROM uni_audit_logs
+       WHERE created_at >= NOW() - INTERVAL '24 hours'
+       GROUP BY severity`
+    ),
+    // Rate limit related failures (4xx from failed attempts)
+    query<{ endpoint: string; count: string }>(
+      `SELECT endpoint, COUNT(*) AS count
+       FROM uni_failed_attempts
+       WHERE attempted_at >= NOW() - INTERVAL '24 hours'
+       GROUP BY endpoint
+       ORDER BY count DESC
+       LIMIT 10`
+    ),
+    // Platform stats
+    queryOne<{ count: string }>(`SELECT COUNT(*) AS count FROM uni_users`),
+    queryOne<{ count: string }>(`SELECT COUNT(*) AS count FROM uni_documents`),
+  ]);
+
+  res.json({
+    generatedAt: new Date().toISOString(),
+    platform: {
+      totalUsers: parseInt(totalUsers?.count ?? "0", 10),
+      totalDocuments: parseInt(totalDocs?.count ?? "0", 10),
+    },
+    suspiciousIps: suspiciousIps.map((r) => ({
+      ip: r.ip_address,
+      events: parseInt(r.event_count, 10),
+      lastSeen: r.last_seen,
+    })),
+    recentCriticalEvents: recentCritical,
+    severityMetrics: Object.fromEntries(severityCounts.map((r) => [r.severity, parseInt(r.count, 10)])),
+    rateLimitHits: rateLimitHits.map((r) => ({
+      endpoint: r.endpoint,
+      failures: parseInt(r.count, 10),
+    })),
+    alertThreshold: {
+      criticalEventsPerIpIn5Min: 10,
+      description: "Email de alerta se dispara cuando una IP supera este umbral",
+    },
+  });
+});
+
 // ─── Cleanup maintenance (internal) ──────────────────────────────────────────
 router.post("/cleanup", async (req, res: Response) => {
   const apiKey = req.headers["x-internal-key"];

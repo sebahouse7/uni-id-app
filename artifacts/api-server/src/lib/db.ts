@@ -37,6 +37,12 @@ CREATE INDEX IF NOT EXISTS idx_security_events_user ON public.uni_security_event
 CREATE INDEX IF NOT EXISTS idx_security_events_severity ON public.uni_security_events USING btree (severity, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_email_hash ON public.uni_users USING btree (recovery_email_hash);
 CREATE INDEX IF NOT EXISTS idx_user_keys_user ON public.uni_user_keys USING btree (user_id);
+ALTER TABLE public.uni_users ADD COLUMN IF NOT EXISTS name_enc text;
+ALTER TABLE public.uni_users ADD COLUMN IF NOT EXISTS bio_enc text;
+CREATE TABLE IF NOT EXISTS public.uni_document_signatures (id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,user_id uuid NOT NULL REFERENCES public.uni_users(id) ON DELETE CASCADE,document_id uuid REFERENCES public.uni_documents(id) ON DELETE SET NULL,document_hash text NOT NULL,signature text NOT NULL,algorithm text DEFAULT 'HMAC-SHA256' NOT NULL,signer_global_id text,ip_address text,device_id text,consented boolean DEFAULT true NOT NULL,metadata jsonb,created_at timestamp with time zone DEFAULT now() NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_doc_sigs_user ON public.uni_document_signatures USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_doc_sigs_hash ON public.uni_document_signatures USING btree (document_hash);
+CREATE INDEX IF NOT EXISTS idx_doc_sigs_doc ON public.uni_document_signatures USING btree (document_id);
 `;
 
 export async function runMigration(): Promise<void> {

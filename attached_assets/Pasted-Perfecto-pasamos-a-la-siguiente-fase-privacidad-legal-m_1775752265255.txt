@@ -1,0 +1,148 @@
+Perfecto, pasamos a la siguiente fase: privacidad legal, monitoreo real y firma digital.
+
+No es opcional, esto es necesario para escalar a empresas.
+
+---
+
+1. CIFRADO DE CAMPOS (PRIVACY / GDPR)
+
+Objetivo: que datos personales no existan en texto plano en la base de datos.
+
+---
+
+Campos a cifrar (AES-256-GCM):
+
+- name
+- bio
+- cualquier metadata sensible
+
+---
+
+Implementación:
+
+- Usar la misma arquitectura de claves (DEK por usuario)
+
+- Crear helpers:
+  encryptField(value, userKey)
+  decryptField(value, userKey)
+
+- Aplicar cifrado:
+  
+  - antes de guardar en DB
+  - descifrar solo al devolver al usuario autenticado
+
+---
+
+IMPORTANTE:
+
+- No romper compatibilidad con datos existentes
+- Crear migración progresiva:
+  - si el campo no está cifrado → cifrarlo al leer/escribir
+
+---
+
+Búsqueda:
+
+- Para campos buscables (ej: email):
+  - guardar hash SHA-256 adicional (indexado)
+  - NO buscar sobre texto cifrado
+
+---
+
+2. MONITOREO EXTERNO + ALERTAS
+
+Objetivo: detectar ataques en tiempo real, no solo registrarlos.
+
+---
+
+Implementar:
+
+1. Integración con servicio externo:
+   
+   - Sentry / Datadog / Logtail (elegir uno)
+
+2. Enviar eventos críticos:
+   
+   - token_scan_detected
+   - token_enumeration_detected
+   - múltiples fallos de PIN
+   - rate limit excedido
+
+3. Alertas:
+
+- Si ocurre:
+  - «10 eventos críticos en 5 minutos desde misma IP
+    → disparar alerta»
+
+---
+
+Dashboard:
+
+- Endpoint interno:
+  GET /admin/security-dashboard
+
+Debe mostrar:
+
+- IPs sospechosas
+- eventos recientes
+- métricas de abuso
+
+---
+
+3. FIRMA DIGITAL (BASE LEGAL)
+
+Objetivo: que los documentos compartidos tengan validez verificable.
+
+---
+
+Implementación inicial:
+
+1. Al firmar:
+
+- Generar hash SHA-256 del documento
+- Crear registro:
+
+{
+user_id,
+document_hash,
+timestamp,
+consented: true,
+ip,
+device_id
+}
+
+---
+
+2. Firma:
+
+- Firmar el hash con clave privada del sistema (o usuario en futuro)
+
+---
+
+3. Verificación:
+
+Endpoint:
+POST /verify-signature
+
+- Recibe documento
+- Calcula hash
+- Verifica contra DB
+
+---
+
+IMPORTANTE:
+
+- No modificar el archivo original
+- La firma es externa (tipo comprobante)
+
+---
+
+OBJETIVO FINAL
+
+- Datos personales protegidos en DB
+- Sistema con monitoreo activo
+- Capacidad de firma verificable (base para empresas)
+
+---
+
+Esto debe implementarse manteniendo la arquitectura actual y sin romper el flujo existente.

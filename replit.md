@@ -44,6 +44,37 @@ Mobile identity wallet app built with Expo React Native.
 - Trust score visible in Security tab with credential count and node count
 - `VerifiableCredential` interface for future verifiable identity expansion
 
+### Privacy & Security — FASE 7 (Complete)
+
+#### 1. Field-Level Encryption (GDPR/Privacy)
+- `name` and `bio` columns now encrypted at rest using AES-256-GCM + per-user DEK
+- New columns: `uni_users.name_enc`, `uni_users.bio_enc` (base64 ciphertext)
+- Key hierarchy: ENCRYPTION_MASTER_KEY → wraps per-user DEK (in `uni_user_keys`) → encrypts fields
+- **Progressive migration**: `lib/dataMigration.ts` runs on every startup; encrypts any user where `name_enc IS NULL` (max 500/batch, safe to repeat)
+- **Backward compat**: all read paths check `name_enc` first, fall back to plaintext `name` — zero downtime
+- Affected endpoints: `GET /auth/me`, `PATCH /auth/me`, `GET /identity/:globalId`, `GET /verify/:id`
+- Public identity endpoints decrypt using server-side DEK (no user token required for reads)
+
+#### 2. Real-time Security Alerting
+- `lib/alerting.ts` — `checkAndAlert(eventType, ip)` checks `uni_security_events` for ≥10 critical events from same IP in last 5 minutes
+- Sends email alert (via existing SMTP) to `SMTP_FROM` admin address — HTML + plaintext body
+- In-memory dedup: same IP won't get more than 1 alert per 5-minute window
+- **Wiring**: `detectAndLogAnomaly()` in `audit.ts` calls `checkAndAlert()` after every critical event (non-blocking)
+- Triggered by: `token_scan_detected`, `token_enumeration_detected` (share endpoints)
+
+#### 3. Admin Security Dashboard
+- `GET /monitor/admin/security-dashboard` — requires `x-internal-key` header matching `INTERNAL_API_KEY` env var
+- Returns: suspicious IPs (top 10 by events/24h), recent critical events (last 50), severity metrics, rate-limit hits, platform stats
+- Set `INTERNAL_API_KEY` env var in Railway to enable in production
+
+#### 4. Digital Signatures (Legal Foundation)
+- `lib/signing.ts` — HMAC-SHA256 with system key derived from `ENCRYPTION_MASTER_KEY` + domain separator
+- `uni_document_signatures` table: `id, user_id, document_id, document_hash, signature, algorithm, signer_global_id, ip_address, device_id, consented, metadata, created_at`
+- **New endpoints**:
+  - `POST /signatures/sign` (auth required) — signs a document by ID; creates canonical JSON hash; stores in DB
+  - `GET  /signatures/mine` (auth required) — lists user's signatures
+  - `POST /signatures/verify` (public) — verifies document hash + signature; returns all matching records
+
 ### Railway Backend Notes
 - **IMPORTANT**: `MP_ACCESS_TOKEN` must be set manually in Railway dashboard → API service → Variables
   (Replit RAILWAY_TOKEN expired/unauthorized for API operations)

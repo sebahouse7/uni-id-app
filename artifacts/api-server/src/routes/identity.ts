@@ -1,35 +1,50 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { queryOne } from "../lib/db";
+import { decryptFieldAsync } from "../lib/keyManager";
 
 const router = Router();
 
-async function lookupIdentity(identifier: string): Promise<any | null> {
+type UserRow = {
+  id: string;
+  name: string;
+  bio: string | null;
+  name_enc: string | null;
+  bio_enc: string | null;
+  global_id: string;
+  created_at: string;
+  network_plan: string;
+  plan_expires_at: string | null;
+};
+
+async function lookupIdentity(identifier: string): Promise<UserRow | null> {
   let sql: string;
   let param: string;
 
   if (identifier.startsWith("did:uniid:")) {
-    sql = `SELECT id, name, bio, global_id, created_at, network_plan, plan_expires_at
+    sql = `SELECT id, name, bio, name_enc, bio_enc, global_id, created_at, network_plan, plan_expires_at
            FROM uni_users WHERE global_id = $1`;
     param = identifier;
   } else {
     const clean = identifier.replace(/^#/, "").toUpperCase();
-    sql = `SELECT id, name, bio, global_id, created_at, network_plan, plan_expires_at
+    sql = `SELECT id, name, bio, name_enc, bio_enc, global_id, created_at, network_plan, plan_expires_at
            FROM uni_users
            WHERE UPPER(REPLACE(REPLACE(global_id, 'did:uniid:', ''), '-', '')) LIKE $1 || '%'
            LIMIT 1`;
     param = clean;
   }
 
-  return queryOne<{
-    id: string;
-    name: string;
-    bio: string | null;
-    global_id: string;
-    created_at: string;
-    network_plan: string;
-    plan_expires_at: string | null;
-  }>(sql, [param]);
+  return queryOne<UserRow>(sql, [param]);
+}
+
+async function decryptUserFields(user: UserRow): Promise<UserRow> {
+  try {
+    const name = user.name_enc ? await decryptFieldAsync(user.name_enc, user.id) : user.name;
+    const bio = user.bio_enc ? await decryptFieldAsync(user.bio_enc, user.id) : user.bio;
+    return { ...user, name, bio };
+  } catch {
+    return user; // fallback to plaintext on decryption error
+  }
 }
 
 function buildPublicProfile(user: any) {
@@ -65,12 +80,13 @@ router.get("/:globalId", async (req: Request, res: Response) => {
     return;
   }
 
-  const user = await lookupIdentity(globalId);
-  if (!user) {
+  const rawUser = await lookupIdentity(globalId);
+  if (!rawUser) {
     res.status(404).json({ error: "Identidad no encontrada en la red uni.id" });
     return;
   }
 
+  const user = await decryptUserFields(rawUser);
   res.json(buildPublicProfile(user));
 });
 

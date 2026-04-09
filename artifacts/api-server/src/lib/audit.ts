@@ -1,4 +1,5 @@
 import { query, queryOne } from "./db";
+import { checkAndAlert } from "./alerting";
 
 export type AuditSeverity = "info" | "warn" | "critical";
 
@@ -97,6 +98,8 @@ export async function detectAndLogAnomaly(opts: {
       ip: opts.ip,
       metadata: { count, windowMinutes: opts.windowMinutes ?? 5, ...opts.metadata },
     });
+    // Fire real-time alert if threshold exceeded (non-blocking)
+    checkAndAlert(opts.anomalyEvent, opts.ip).catch(() => {});
   }
   return isAbuse;
 }

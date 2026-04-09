@@ -11,8 +11,10 @@ import recoveryRouter from "./recovery";
 import shareRouter from "./share";
 import businessRouter from "./business";
 import identityRouter from "./identity";
+import signaturesRouter from "./signatures";
 import { generalLimiter } from "../middlewares/rateLimit";
 import { queryOne } from "../lib/db";
+import { decryptFieldAsync } from "../lib/keyManager";
 
 const router: IRouter = Router();
 
@@ -29,6 +31,7 @@ router.use("/backup", backupRouter);
 router.use("/share", shareRouter);
 router.use("/businesses", businessRouter);
 router.use("/identity", identityRouter);
+router.use("/signatures", signaturesRouter);
 
 // ─── GET /verify/:id — verificación pública de identidad (sin auth) ───────────
 // Acepta: did:uniid:<uuid>, short ID (#ABC123456 o ABC123456)
@@ -43,14 +46,14 @@ router.get("/verify/:id", async (req: Request, res: Response) => {
 
   if (rawId.startsWith("did:uniid:")) {
     user = await queryOne(
-      `SELECT id, name, bio, global_id, created_at, network_plan, plan_expires_at
+      `SELECT id, name, bio, name_enc, bio_enc, global_id, created_at, network_plan, plan_expires_at
        FROM uni_users WHERE global_id = $1`,
       [rawId]
     );
   } else {
     const clean = rawId.replace(/^#/, "").toUpperCase().slice(0, 9);
     user = await queryOne(
-      `SELECT id, name, bio, global_id, created_at, network_plan, plan_expires_at
+      `SELECT id, name, bio, name_enc, bio_enc, global_id, created_at, network_plan, plan_expires_at
        FROM uni_users
        WHERE UPPER(REPLACE(REPLACE(global_id, 'did:uniid:', ''), '-', '')) LIKE $1 || '%'
        LIMIT 1`,
@@ -62,6 +65,12 @@ router.get("/verify/:id", async (req: Request, res: Response) => {
     res.status(404).json({ error: "Identidad no encontrada en la red uni.id" });
     return;
   }
+
+  // Decrypt name/bio (fall back to plaintext for pre-migration rows)
+  try {
+    if (user.name_enc) user.name = await decryptFieldAsync(user.name_enc, user.id);
+    if (user.bio_enc) user.bio = await decryptFieldAsync(user.bio_enc, user.id);
+  } catch {}
 
   const isPro = user.network_plan !== "free";
   const shortId = user.global_id

@@ -4,7 +4,7 @@ import { body, validationResult } from "express-validator";
 import { query, queryOne } from "../lib/db";
 import { signAccessToken, signRefreshToken, rotateRefreshToken, revokeAllUserTokens } from "../lib/jwt";
 import { hashDeviceId } from "../lib/crypto";
-import { hashEmail, encryptFieldAsync } from "../lib/keyManager";
+import { hashEmail, encryptFieldAsync, decryptFieldAsync } from "../lib/keyManager";
 import { log, getAuditLogs } from "../lib/audit";
 import { recordFailedAttempt, raiseSecurityEvent } from "../lib/monitor";
 import { requireAuth } from "../middlewares/auth";
@@ -64,6 +64,17 @@ router.post(
         );
         user = rows[0];
         isNew = true;
+
+        // Encrypt name/bio immediately after user creation
+        try {
+          const nameEnc = await encryptFieldAsync(name, user.id);
+          const bioEnc = bio ? await encryptFieldAsync(bio, user.id) : null;
+          await query(
+            `UPDATE uni_users SET name_enc = $1, bio_enc = $2 WHERE id = $3`,
+            [nameEnc, bioEnc, user.id]
+          );
+        } catch {}
+
         if (recoveryEmail) {
           const emailHash = hashEmail(recoveryEmail);
           const emailEnc = await encryptFieldAsync(recoveryEmail, user.id);
@@ -128,12 +139,33 @@ router.post("/logout", requireAuth, async (req: Request, res: Response) => {
 
 // Get current user profile
 router.get("/me", requireAuth, async (req: Request, res: Response) => {
-  const user = await queryOne(
-    `SELECT id, global_id, name, bio, network_plan, plan_expires_at, created_at FROM uni_users WHERE id = $1`,
+  const user = await queryOne<{
+    id: string; global_id: string; name: string; bio: string | null;
+    name_enc: string | null; bio_enc: string | null;
+    network_plan: string; plan_expires_at: string | null; created_at: string;
+  }>(
+    `SELECT id, global_id, name, bio, name_enc, bio_enc, network_plan, plan_expires_at, created_at FROM uni_users WHERE id = $1`,
     [req.user!.sub]
   );
   if (!user) { res.status(404).json({ error: "Usuario no encontrado" }); return; }
-  res.json(user);
+
+  // Decrypt encrypted fields; fall back to plaintext for pre-migration data
+  let displayName = user.name;
+  let displayBio = user.bio;
+  try {
+    if (user.name_enc) displayName = await decryptFieldAsync(user.name_enc, user.id);
+    if (user.bio_enc) displayBio = await decryptFieldAsync(user.bio_enc, user.id);
+  } catch {}
+
+  res.json({
+    id: user.id,
+    global_id: user.global_id,
+    name: displayName,
+    bio: displayBio,
+    network_plan: user.network_plan,
+    plan_expires_at: user.plan_expires_at,
+    created_at: user.created_at,
+  });
 });
 
 // Update profile
@@ -147,13 +179,34 @@ router.patch(
   async (req: Request, res: Response) => {
     if (!validate(req, res)) return;
     const { name, bio } = req.body;
-    const user = await queryOne(
-      `UPDATE uni_users SET name = COALESCE($1, name), bio = COALESCE($2, bio), updated_at = NOW()
-       WHERE id = $3 RETURNING id, name, bio, network_plan`,
-      [name ?? null, bio ?? null, req.user!.sub]
+    const userId = req.user!.sub;
+
+    // Build encrypted fields in parallel
+    const nameEnc = name ? await encryptFieldAsync(name, userId).catch(() => null) : null;
+    const bioEnc = bio !== undefined ? (bio ? await encryptFieldAsync(bio, userId).catch(() => null) : null) : undefined;
+
+    const user = await queryOne<{ id: string; name: string; bio: string | null; name_enc: string | null; bio_enc: string | null; network_plan: string }>(
+      `UPDATE uni_users
+       SET name     = COALESCE($1, name),
+           bio      = COALESCE($2, bio),
+           name_enc = CASE WHEN $3::text IS NOT NULL THEN $3 ELSE name_enc END,
+           bio_enc  = CASE WHEN $4::text IS NOT NULL THEN $4 WHEN $2::text = '' THEN NULL ELSE bio_enc END,
+           updated_at = NOW()
+       WHERE id = $5
+       RETURNING id, name, bio, name_enc, bio_enc, network_plan`,
+      [name ?? null, bio ?? null, nameEnc, bioEnc ?? null, userId]
     );
-    await log({ userId: req.user!.sub, event: "profile.updated", ip: req.ip });
-    res.json(user);
+
+    // Decrypt to return plaintext to client
+    let displayName = user?.name ?? "";
+    let displayBio = user?.bio ?? null;
+    try {
+      if (user?.name_enc) displayName = await decryptFieldAsync(user.name_enc, userId);
+      if (user?.bio_enc) displayBio = await decryptFieldAsync(user.bio_enc, userId);
+    } catch {}
+
+    await log({ userId, event: "profile.updated", ip: req.ip });
+    res.json({ id: user?.id, name: displayName, bio: displayBio, network_plan: user?.network_plan });
   }
 );
 
