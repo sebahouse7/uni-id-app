@@ -59,6 +59,8 @@
   },
   "dependencies": {
     "@noble/ciphers": "^2.1.1",
+    "@noble/ed25519": "^2.3.0",
+    "@noble/hashes": "^1.8.0",
     "expo-clipboard": "^8.0.8",
     "expo-crypto": "~15.0.8",
     "expo-document-picker": "^14.0.8",

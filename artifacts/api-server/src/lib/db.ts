@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS public.uni_document_signatures (id uuid DEFAULT gen_r
 CREATE INDEX IF NOT EXISTS idx_doc_sigs_user ON public.uni_document_signatures USING btree (user_id);
 CREATE INDEX IF NOT EXISTS idx_doc_sigs_hash ON public.uni_document_signatures USING btree (document_hash);
 CREATE INDEX IF NOT EXISTS idx_doc_sigs_doc ON public.uni_document_signatures USING btree (document_id);
+ALTER TABLE public.uni_users ADD COLUMN IF NOT EXISTS signing_public_key text;
+ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS signature_type text DEFAULT 'hmac';
+ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS public_key_snapshot text;
+CREATE INDEX IF NOT EXISTS idx_doc_sigs_type ON public.uni_document_signatures USING btree (signature_type);
 `;
 
 export async function runMigration(): Promise<void> {

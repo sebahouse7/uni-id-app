@@ -15,6 +15,7 @@ import signaturesRouter from "./signatures";
 import { generalLimiter } from "../middlewares/rateLimit";
 import { queryOne } from "../lib/db";
 import { decryptFieldAsync } from "../lib/keyManager";
+import { getUserPublicKey, getKeyFingerprint } from "../lib/signing";
 
 const router: IRouter = Router();
 
@@ -32,6 +33,26 @@ router.use("/share", shareRouter);
 router.use("/businesses", businessRouter);
 router.use("/identity", identityRouter);
 router.use("/signatures", signaturesRouter);
+
+// ─── GET /users/:userId/public-key — obtener clave pública Ed25519 (público) ──
+router.get("/users/:userId/public-key", async (req: Request, res: Response) => {
+  const userId = String(req.params["userId"] ?? "");
+  if (!userId || !/^[0-9a-f-]{36}$/.test(userId)) {
+    res.status(400).json({ error: "userId inválido" });
+    return;
+  }
+  const publicKey = await getUserPublicKey(userId);
+  if (!publicKey) {
+    res.status(404).json({ error: "Clave pública no registrada para este usuario" });
+    return;
+  }
+  res.json({
+    userId: String(userId),
+    publicKey,
+    fingerprint: getKeyFingerprint(publicKey),
+    algorithm: "Ed25519",
+  });
+});
 
 // ─── GET /verify/:id — verificación pública de identidad (sin auth) ───────────
 // Acepta: did:uniid:<uuid>, short ID (#ABC123456 o ABC123456)

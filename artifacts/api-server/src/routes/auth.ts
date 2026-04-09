@@ -5,6 +5,7 @@ import { query, queryOne } from "../lib/db";
 import { signAccessToken, signRefreshToken, rotateRefreshToken, revokeAllUserTokens } from "../lib/jwt";
 import { hashDeviceId } from "../lib/crypto";
 import { hashEmail, encryptFieldAsync, decryptFieldAsync } from "../lib/keyManager";
+import { storeUserPublicKey, getUserPublicKey, getKeyFingerprint } from "../lib/signing";
 import { log, getAuditLogs } from "../lib/audit";
 import { recordFailedAttempt, raiseSecurityEvent } from "../lib/monitor";
 import { requireAuth } from "../middlewares/auth";
@@ -207,6 +208,43 @@ router.patch(
 
     await log({ userId, event: "profile.updated", ip: req.ip });
     res.json({ id: user?.id, name: displayName, bio: displayBio, network_plan: user?.network_plan });
+  }
+);
+
+// ─── GET /auth/me/signing-key — obtener clave pública registrada ─────────────
+router.get("/me/signing-key", requireAuth, async (req: Request, res: Response) => {
+  const userId = req.user!.sub;
+  const publicKey = await getUserPublicKey(userId);
+  res.json({
+    publicKey: publicKey ?? null,
+    fingerprint: publicKey ? getKeyFingerprint(publicKey) : null,
+    registered: !!publicKey,
+  });
+});
+
+// ─── POST /auth/me/signing-key — registrar clave pública Ed25519 ──────────────
+router.post(
+  "/me/signing-key",
+  requireAuth,
+  [
+    body("publicKey")
+      .isString()
+      .isLength({ min: 64, max: 64 })
+      .matches(/^[0-9a-f]{64}$/)
+      .withMessage("publicKey debe ser 64 hex chars (32 bytes Ed25519)"),
+  ],
+  async (req: Request, res: Response) => {
+    if (!validate(req, res)) return;
+    const userId = req.user!.sub;
+    const { publicKey } = req.body;
+    await storeUserPublicKey(userId, publicKey);
+    await log({
+      userId,
+      event: "signing_key.registered",
+      ip: req.ip,
+      metadata: { fingerprint: getKeyFingerprint(publicKey) },
+    });
+    res.json({ ok: true, fingerprint: getKeyFingerprint(publicKey) });
   }
 );
 

@@ -424,3 +424,98 @@ export async function apiAddBusinessDocument(businessId: string, data: {
 export async function apiDeleteBusinessDocument(businessId: string, docId: string): Promise<void> {
   await authFetch(`/businesses/${businessId}/documents/${docId}`, { method: "DELETE" });
 }
+
+// ─── Firmas Digitales (Ed25519 asimétrico) ────────────────────────────────────
+
+/**
+ * Registra la clave pública Ed25519 del dispositivo en el backend.
+ * Idempotente — se puede llamar múltiples veces (solo actualiza si cambia).
+ */
+export async function apiRegisterSigningKey(publicKeyHex: string): Promise<{ ok: boolean }> {
+  const res = await authFetch("/auth/me/signing-key", {
+    method: "POST",
+    body: JSON.stringify({ publicKey: publicKeyHex }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Error al registrar clave de firma");
+  }
+  return res.json();
+}
+
+/**
+ * Obtiene la clave pública Ed25519 registrada del usuario actual.
+ * Retorna null si no hay clave registrada.
+ */
+export async function apiGetMySigningKey(): Promise<{ publicKey: string | null; fingerprint: string | null }> {
+  const res = await authFetch("/auth/me/signing-key");
+  if (!res.ok) return { publicKey: null, fingerprint: null };
+  return res.json();
+}
+
+/**
+ * Obtiene la clave pública de un usuario por su ID (endpoint público).
+ */
+export async function apiGetUserPublicKey(userId: string): Promise<{ publicKey: string | null; fingerprint: string | null }> {
+  const res = await fetch(`${BASE_URL}/users/${userId}/public-key`);
+  if (!res.ok) return { publicKey: null, fingerprint: null };
+  return res.json();
+}
+
+/**
+ * Firma un documento de forma asimétrica (Ed25519).
+ * La firma se genera en el dispositivo y se envía al backend junto con el hash.
+ * Si no se tiene clave asimétrica, usa el fallback HMAC del backend.
+ */
+export async function apiSignDocument(params: {
+  documentId: string;
+  /** Firma Ed25519 generada en el dispositivo (hex de 128 chars). Si null → fallback a HMAC */
+  signature?: string;
+  /** Hash canónico del payload que fue firmado. */
+  canonicalPayload?: string;
+  deviceId?: string;
+  consented?: boolean;
+}): Promise<any> {
+  const res = await authFetch("/signatures/sign", {
+    method: "POST",
+    body: JSON.stringify({
+      documentId: params.documentId,
+      signature: params.signature,
+      canonicalPayload: params.canonicalPayload,
+      deviceId: params.deviceId,
+      consented: params.consented ?? true,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Error al firmar documento");
+  }
+  return res.json();
+}
+
+/**
+ * Verifica una firma digitalmente contra el backend.
+ */
+export async function apiVerifySignature(params: {
+  documentHash: string;
+  signature?: string;
+  userId?: string;
+}): Promise<{ verified: boolean; reason: string; records: any[] }> {
+  const res = await fetch(`${BASE_URL}/signatures/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) return { verified: false, reason: "Error de red", records: [] };
+  return res.json();
+}
+
+/**
+ * Retorna las firmas del usuario autenticado.
+ */
+export async function apiGetMySignatures(limit = 50): Promise<any[]> {
+  const res = await authFetch(`/signatures/mine?limit=${limit}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.signatures ?? [];
+}
