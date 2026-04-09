@@ -11,7 +11,7 @@ interface Props {
   onFinish: () => void;
 }
 
-const LOGO = require("../assets/images/logo-uniid.png");
+const LOGO = require("../assets/images/icon.png");
 
 export function SplashScreenCustom({ onFinish }: Props) {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -69,7 +69,7 @@ export function SplashScreenCustom({ onFinish }: Props) {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0a0f1f",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 999,
@@ -79,22 +79,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 20,
+    width: 130,
+    height: 130,
+    borderRadius: 28,
+    marginBottom: 24,
   },
   title: {
     fontSize: 36,
     fontWeight: "800",
     letterSpacing: 6,
-    color: "#0A0F1E",
+    color: "#FFFFFF",
     fontFamily: "Inter_700Bold",
   },
   sub: {
     marginTop: 6,
     fontSize: 13,
     letterSpacing: 2.5,
-    color: "#1A6FE8",
+    color: "#00D4FF",
     textTransform: "lowercase",
     fontFamily: "Inter_400Regular",
   },
@@ -102,7 +103,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 52,
     fontSize: 11,
-    color: "#9BA3B2",
+    color: "rgba(255,255,255,0.3)",
     letterSpacing: 1.5,
     fontFamily: "Inter_400Regular",
   },
