@@ -19,12 +19,7 @@ import Colors from "@/constants/colors";
 import { Radii, Shadows, Spacing } from "@/constants/design";
 import { NETWORK_PLANS, useIdentity } from "@/context/IdentityContext";
 import { useLanguage } from "@/context/LanguageContext";
-import {
-  PlanId,
-  createMercadoPagoCheckout,
-  openPaymentBrowser,
-} from "@/lib/payments";
-import { apiGetSubscriptionStatus } from "@/lib/apiClient";
+import { openPayPalCheckout } from "@/lib/payments";
 
 const ECOSYSTEMS = [
   { icon: "briefcase", labelKey: "banks", descKey: "banksDesc", color: "#1A6FE8" },
@@ -40,67 +35,20 @@ export default function NetworkScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { node, updateNode } = useIdentity();
+  const { node } = useIdentity();
   const { t } = useLanguage();
   const [purchasing, setPurchasing] = useState<string | null>(null);
 
-  const handlePurchase = async (planId: PlanId) => {
+  const handlePurchase = async (planId: string) => {
     if (!node) return;
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     setPurchasing(planId);
     try {
-      const result = await createMercadoPagoCheckout(planId, node.id);
-
-      if (!result.url) {
-        Alert.alert(
-          "Sin link de pago",
-          "El servidor no devolvió un link de pago. Verificá tu conexión e intentá de nuevo."
-        );
-        return;
-      }
-
-      const status = await openPaymentBrowser(result.url);
-
-      if (status === "cancelled") {
-        // User closed the browser — don't show an alert, just reset
-        return;
-      }
-
-      // Poll backend for real subscription status — never trust client-side
-      let attempts = 0;
-      let activated = false;
-      while (attempts < 8 && !activated) {
-        await new Promise((r) => setTimeout(r, 2000));
-        try {
-          const sub = await apiGetSubscriptionStatus();
-          const activePlan = sub?.current?.plan;
-          if (activePlan && activePlan !== "free" && sub?.current?.isActive) {
-            await updateNode({ networkPlan: activePlan as "basic" | "pro" });
-            Alert.alert(
-              "✅ Plan activado",
-              `Tu plan ${activePlan === "basic" ? "Conexión Básica" : "Conexión Pro"} está activo.`
-            );
-            activated = true;
-          }
-        } catch {}
-        attempts++;
-      }
-      if (!activated) {
-        Alert.alert(
-          "Pago en verificación",
-          "Tu pago está siendo procesado. El plan se activará automáticamente. Cerrá y abrí la app en unos minutos."
-        );
-      }
+      await openPayPalCheckout();
     } catch (e: any) {
-      const msg = e?.message ?? "Error desconocido";
-      Alert.alert(
-        "Error al procesar pago",
-        msg.includes("Tiempo de espera") || msg.includes("conexión")
-          ? "Sin conexión al servidor. Verificá tu internet e intentá de nuevo."
-          : msg
-      );
+      Alert.alert("Error", "No se pudo abrir PayPal. Verificá tu conexión.");
     } finally {
       setPurchasing(null);
     }
