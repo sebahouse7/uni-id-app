@@ -60,15 +60,11 @@ async function getOrCreateSalt(): Promise<Uint8Array> {
 export async function deriveVaultKey(): Promise<Uint8Array> {
   if (_cachedKey) return _cachedKey;
 
-  const pinHash = await getPin();
-  if (!pinHash) {
-    throw new Error("PIN no configurado — configura un PIN antes de acceder al vault");
-  }
-
+  const pinHash = await getPin().catch(() => null);
   const deviceId = await getOrCreateDeviceId();
   const salt = await getOrCreateSalt();
 
-  const combined = pinHash + "|" + deviceId + "|" + bytesToHex(salt);
+  const combined = (pinHash ?? "no-pin") + "|" + deviceId + "|" + bytesToHex(salt);
   const digest = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
     combined,
