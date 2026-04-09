@@ -4,9 +4,9 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
+import * as ClipboardLib from "expo-clipboard";
 import {
   Alert,
-  Clipboard,
   Modal,
   Platform,
   Pressable,
@@ -75,9 +75,9 @@ export function OfflineQRModal({ visible, onClose, encoded, pkg }: OfflineQRModa
     }
   };
 
-  const copyCode = () => {
+  const copyCode = async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Clipboard.setString(encoded);
+    await ClipboardLib.setStringAsync(encoded);
     Alert.alert("Copiado", "El código de identidad fue copiado al portapapeles.");
   };
 
