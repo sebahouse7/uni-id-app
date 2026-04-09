@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AnimatedPressable } from "@/components/ui/AnimatedPressable";
 import Colors from "@/constants/colors";
 import { Radii, Shadows, Spacing } from "@/constants/design";
+import { useIdentity } from "@/context/IdentityContext";
 import { useLanguage } from "@/context/LanguageContext";
 import {
   apiAddBusinessDocument,
@@ -29,6 +30,7 @@ import {
   apiGetBusinesses,
   apiUpdateBusiness,
 } from "@/lib/apiClient";
+import { openPayPalCheckout } from "@/lib/payments";
 
 interface Business {
   id: string;
@@ -64,7 +66,9 @@ export default function BusinessScreen() {
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
   const { t } = useLanguage();
+  const { node } = useIdentity();
 
+  const [paying, setPaying] = useState(false);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Business | null>(null);
@@ -209,6 +213,78 @@ export default function BusinessScreen() {
   };
 
   const BIZ_TYPES_PT = (t.businessDocTypes ?? "Estatuto,Inscripción,Balance,Contrato,Poder,Otro").split(",");
+
+  const isEmpresa = node?.networkPlan === "empresa";
+
+  if (!isEmpresa) {
+    return (
+      <View style={[s.root, { backgroundColor: c.bg, paddingTop: insets.top }]}>
+        <View style={[s.header, { borderBottomColor: c.border }]}>
+          <View>
+            <Text style={[s.headerTitle, { color: c.text }]}>{t.businessTitle ?? "Mi empresa"}</Text>
+            <Text style={[s.headerSub, { color: c.sub }]}>{t.businessSubtitle ?? "Identidad empresarial"}</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
+          <LinearGradient
+            colors={["#1A6FE8", "#7C3AED"]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={{ width: 72, height: 72, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 24 }}
+          >
+            <Feather name="briefcase" size={32} color="#fff" />
+          </LinearGradient>
+          <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: c.text, textAlign: "center", marginBottom: 10 }}>
+            Plan Empresa
+          </Text>
+          <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: c.sub, textAlign: "center", lineHeight: 22, marginBottom: 32 }}>
+            Registrá y gestioná la identidad digital de tu empresa. Documentos, razón social, CUIT y más.
+          </Text>
+          {[
+            "Registro empresarial verificado",
+            "Documentos corporativos cifrados",
+            "Identidad DID para tu empresa",
+            "Compartí datos con QR seguro",
+          ].map((feat) => (
+            <View key={feat} style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10, alignSelf: "flex-start" }}>
+              <LinearGradient colors={["#1A6FE8", "#7C3AED"]} style={{ width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="check" size={12} color="#fff" />
+              </LinearGradient>
+              <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: c.text }}>{feat}</Text>
+            </View>
+          ))}
+          <AnimatedPressable
+            onPress={async () => {
+              setPaying(true);
+              try {
+                await openPayPalCheckout();
+              } finally {
+                setPaying(false);
+              }
+            }}
+            style={{
+              marginTop: 32, borderRadius: 16, overflow: "hidden",
+              width: "100%", opacity: paying ? 0.7 : 1,
+            }}
+            disabled={paying}
+          >
+            <LinearGradient
+              colors={["#003087", "#009CDE"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={{ paddingVertical: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 10 }}
+            >
+              <Feather name="credit-card" size={18} color="#fff" />
+              <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" }}>
+                {paying ? "Abriendo PayPal..." : "Suscribirse con PayPal"}
+              </Text>
+            </LinearGradient>
+          </AnimatedPressable>
+          <Text style={{ marginTop: 14, fontSize: 12, fontFamily: "Inter_400Regular", color: c.sub, textAlign: "center" }}>
+            Pago seguro · Cancelá cuando quieras
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[s.root, { backgroundColor: c.bg, paddingTop: insets.top }]}>
