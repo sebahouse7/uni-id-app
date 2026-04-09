@@ -366,3 +366,212 @@ export async function verifyNodeEvent(
       : null,
   };
 }
+
+// ─── Trust Graph — Endorsements ───────────────────────────────────────────────
+
+/**
+ * Canonical payload format for endorsement signatures.
+ * Deterministic — includes both node IDs so the signature is specific
+ * to exactly this endorsement direction. No timestamp needed because
+ * UNIQUE(from_node_id, to_node_id) prevents replay.
+ */
+export function buildEndorsementPayload(
+  fromNodeId: string,
+  toNodeId: string
+): string {
+  return `endorse::${fromNodeId}::${toNodeId}`;
+}
+
+/** Reputation weight multiplier per endorsement. */
+const ENDORSEMENT_WEIGHT = 0.05;
+/** Maximum reputation a single endorser can contribute. */
+const MAX_ENDORSEMENT_CONTRIBUTION = 0.5;
+
+export interface Endorsement {
+  id: string;
+  from_node_id: string;
+  to_node_id: string;
+  from_user_id: string | null;
+  to_user_id: string | null;
+  signature: string;
+  canonical_payload: string;
+  reputation_applied: number;
+  created_at: string;
+  // Joined from identity_nodes
+  from_global_id?: string | null;
+  from_reputation?: number | null;
+  from_verified?: boolean | null;
+}
+
+/**
+ * Create an endorsement. Verifies the Ed25519 signature before persisting.
+ * Applies a weighted reputation delta to the endorsed node.
+ *
+ * @returns { endorsement, reputationDelta } or throws on verification failure.
+ */
+export async function createEndorsement(params: {
+  fromUserId: string;
+  toNodeId: string;
+  signature: string;
+  ip?: string | null;
+}): Promise<{ endorsement: Endorsement; reputationDelta: number }> {
+  const { fromUserId, toNodeId, signature, ip } = params;
+
+  // 1. Resolve the endorsing node
+  const fromNode = await getOrSyncNode(fromUserId);
+  if (!fromNode?.node_id || !fromNode.public_key) {
+    throw new Error(
+      "El nodo origen no tiene clave pública registrada. Registrá tu clave de firma primero."
+    );
+  }
+
+  // 2. Prevent self-endorsement
+  if (fromNode.node_id === toNodeId) {
+    throw new Error("No podés respaldar tu propio nodo.");
+  }
+
+  // 3. Verify the target node exists
+  const toNode = await getNodeByNodeId(toNodeId);
+  if (!toNode) {
+    throw new Error("El nodo destino no existe en la red uni.id.");
+  }
+
+  // 4. Verify signature over canonical payload
+  const canonical = buildEndorsementPayload(fromNode.node_id, toNodeId);
+  const valid = verifyEd25519(canonical, signature, fromNode.public_key);
+  if (!valid) {
+    throw new Error(
+      "Firma inválida — el payload no coincide con la clave pública de tu nodo. " +
+        `Asegurate de firmar exactamente: "${canonical}"`
+    );
+  }
+
+  // 5. Compute reputation delta: weight by endorser's reputation
+  const reputationDelta = Math.min(
+    MAX_ENDORSEMENT_CONTRIBUTION,
+    fromNode.node_reputation * ENDORSEMENT_WEIGHT
+  );
+
+  // 6. Insert (UNIQUE constraint prevents double endorsement)
+  const row = await queryOne<Endorsement>(
+    `INSERT INTO node_endorsements
+       (from_node_id, to_node_id, from_user_id, to_user_id,
+        signature, canonical_payload, reputation_applied)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id, from_node_id, to_node_id, from_user_id, to_user_id,
+               signature, canonical_payload, reputation_applied, created_at`,
+    [
+      fromNode.node_id, toNodeId,
+      fromUserId, toNode.user_id,
+      signature, canonical, reputationDelta,
+    ]
+  );
+
+  // 7. Apply reputation delta to endorsed node
+  await adjustReputation(toNode.user_id, reputationDelta);
+
+  // 8. Update trust_level of endorsed node (+1 per endorsement, max 100)
+  await query(
+    `UPDATE identity_nodes
+     SET trust_level = LEAST(100, trust_level + 1), updated_at = now()
+     WHERE user_id = $1`,
+    [toNode.user_id]
+  );
+
+  // 9. Log event for endorser
+  await logAgentEvent({
+    userId: fromUserId,
+    nodeId: fromNode.node_id,
+    eventType: "node.endorsed",
+    payload: canonical,
+    signature,
+    signatureValid: true,
+    reputationDelta: 0, // endorser gets nothing for endorsing
+    ip,
+    metadata: { to_node_id: toNodeId, reputation_applied: reputationDelta },
+  });
+
+  return { endorsement: row!, reputationDelta };
+}
+
+/**
+ * Get all endorsements received by a node (who vouches for it).
+ */
+export async function getEndorsementsForNode(toNodeId: string): Promise<Endorsement[]> {
+  return query<Endorsement>(
+    `SELECT e.id, e.from_node_id, e.to_node_id, e.from_user_id, e.to_user_id,
+            e.signature, e.canonical_payload, e.reputation_applied, e.created_at,
+            n.global_id AS from_global_id,
+            n.node_reputation AS from_reputation,
+            n.verified AS from_verified
+     FROM node_endorsements e
+     LEFT JOIN identity_nodes n ON n.node_id = e.from_node_id
+     WHERE e.to_node_id = $1
+     ORDER BY e.created_at DESC`,
+    [toNodeId]
+  );
+}
+
+/**
+ * Get all endorsements given by a node (who it vouches for).
+ */
+export async function getEndorsementsByNode(fromNodeId: string): Promise<Endorsement[]> {
+  return query<Endorsement>(
+    `SELECT e.id, e.from_node_id, e.to_node_id, e.from_user_id, e.to_user_id,
+            e.signature, e.canonical_payload, e.reputation_applied, e.created_at,
+            n.global_id AS from_global_id,
+            n.node_reputation AS from_reputation,
+            n.verified AS from_verified
+     FROM node_endorsements e
+     LEFT JOIN identity_nodes n ON n.node_id = e.to_node_id
+     WHERE e.from_node_id = $1
+     ORDER BY e.created_at DESC`,
+    [fromNodeId]
+  );
+}
+
+/**
+ * Check if fromNode has already endorsed toNode.
+ */
+export async function hasEndorsed(
+  fromNodeId: string,
+  toNodeId: string
+): Promise<boolean> {
+  const row = await queryOne<{ id: string }>(
+    `SELECT id FROM node_endorsements WHERE from_node_id = $1 AND to_node_id = $2`,
+    [fromNodeId, toNodeId]
+  );
+  return row !== null;
+}
+
+/**
+ * Summarise endorsement stats for a node.
+ */
+export async function getEndorsementStats(toNodeId: string): Promise<{
+  totalEndorsements: number;
+  totalReputationFromEndorsements: number;
+  verifiedEndorsers: number;
+}> {
+  const row = await queryOne<{
+    total: string;
+    total_rep: string;
+    verified_count: string;
+  }>(
+    `SELECT
+       COUNT(*) AS total,
+       COALESCE(SUM(e.reputation_applied), 0) AS total_rep,
+       COUNT(*) FILTER (WHERE n.verified = true) AS verified_count
+     FROM node_endorsements e
+     LEFT JOIN identity_nodes n ON n.node_id = e.from_node_id
+     WHERE e.to_node_id = $1`,
+    [toNodeId]
+  );
+
+  return {
+    totalEndorsements: parseInt(row?.total ?? "0", 10),
+    totalReputationFromEndorsements: parseFloat(
+      parseFloat(row?.total_rep ?? "0").toFixed(4)
+    ),
+    verifiedEndorsers: parseInt(row?.verified_count ?? "0", 10),
+  };
+}

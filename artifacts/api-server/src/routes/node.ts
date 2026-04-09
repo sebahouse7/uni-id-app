@@ -29,6 +29,12 @@ import {
   verifyNodeEvent,
   deriveNodeId,
   REPUTATION_DELTAS,
+  createEndorsement,
+  getEndorsementsForNode,
+  getEndorsementsByNode,
+  getEndorsementStats,
+  buildEndorsementPayload,
+  hasEndorsed,
 } from "../lib/node";
 import { buildEvidenceBundle, verifyEvidence } from "../lib/evidence";
 import { queryOne } from "../lib/db";
@@ -250,6 +256,202 @@ router.get(
         merkleDate: bundle.merkle.date,
         merkleIncluded: bundle.merkle.included,
       },
+    });
+  }
+);
+
+// ─── POST /node/endorse — create a Trust Graph endorsement ───────────────────
+// Auth required. The caller (fromNode) endorses another node (toNodeId).
+// Input: { to_node_id: string, signature: string }
+// The signature must be over the canonical payload built by buildEndorsementPayload.
+router.post(
+  "/endorse",
+  requireAuth,
+  [
+    body("to_node_id")
+      .isString()
+      .matches(/^[0-9a-f]{64}$/)
+      .withMessage("to_node_id debe ser 64 hex chars (node_id del nodo destino)"),
+    body("signature")
+      .isString()
+      .matches(/^[0-9a-f]{128}$/)
+      .withMessage("signature debe ser 128 hex chars (Ed25519 sobre el payload canónico)"),
+  ],
+  async (req: Request, res: Response) => {
+    if (!validate(req, res)) return;
+    const fromUserId = req.user!.sub;
+    const { to_node_id: toNodeId, signature } = req.body as {
+      to_node_id: string;
+      signature: string;
+    };
+
+    // Pre-check: show the expected canonical payload before attempting
+    // so the client knows exactly what to sign on error
+    const fromNode = await getOrSyncNode(fromUserId);
+    const expectedPayload = fromNode?.node_id
+      ? buildEndorsementPayload(fromNode.node_id, toNodeId)
+      : null;
+
+    try {
+      const { endorsement, reputationDelta } = await createEndorsement({
+        fromUserId,
+        toNodeId,
+        signature,
+        ip: req.ip,
+      });
+
+      res.status(201).json({
+        message: "Endorsement registrado. La confianza en la red uni.id se ha actualizado.",
+        endorsement: {
+          id: endorsement.id,
+          fromNodeId: endorsement.from_node_id,
+          toNodeId: endorsement.to_node_id,
+          reputationApplied: endorsement.reputation_applied,
+          createdAt: endorsement.created_at,
+        },
+        reputationDelta,
+        network: "uni.id Trust Graph",
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error interno";
+
+      // Distinguish duplicate from other errors
+      const isDuplicate =
+        err instanceof Error &&
+        (err.message.includes("unique") ||
+          (err as NodeJS.ErrnoException).code === "23505");
+
+      if (isDuplicate) {
+        res.status(409).json({
+          error: "Ya respaldaste este nodo anteriormente.",
+          code: "ALREADY_ENDORSED",
+        });
+        return;
+      }
+
+      const isClient =
+        msg.includes("no existe") ||
+        msg.includes("no tiene clave") ||
+        msg.includes("propio nodo") ||
+        msg.includes("Firma inválida");
+
+      res.status(isClient ? 400 : 500).json({
+        error: msg,
+        ...(expectedPayload && msg.includes("Firma inválida")
+          ? { expectedPayload, hint: "Firmá exactamente este string con tu clave Ed25519." }
+          : {}),
+      });
+    }
+  }
+);
+
+// ─── GET /node/endorse/canonical — helper endpoint: returns expected payload ──
+// Public. Lets a client compute the canonical endorsement payload without signing.
+// Usage: GET /node/endorse/canonical?from=<fromNodeId>&to=<toNodeId>
+router.get("/endorse/canonical", async (req: Request, res: Response) => {
+  const from = String(req.query["from"] ?? "").trim();
+  const to = String(req.query["to"] ?? "").trim();
+
+  if (!/^[0-9a-f]{64}$/.test(from) || !/^[0-9a-f]{64}$/.test(to)) {
+    res.status(400).json({
+      error: "Parámetros inválidos. 'from' y 'to' deben ser node_id (64 hex chars).",
+    });
+    return;
+  }
+
+  res.json({
+    canonicalPayload: buildEndorsementPayload(from, to),
+    instructions:
+      "Firmá este string exacto con tu clave Ed25519 privada (raw 32 bytes). " +
+      "Enviá la firma como 128 hex chars en POST /node/endorse.",
+    format: "Ed25519(privateKey, canonicalPayload, encoding='utf8')",
+  });
+});
+
+// ─── GET /node/:nodeId/endorsements — Trust Graph for a node (public) ─────────
+// IMPORTANT: This route must be registered BEFORE GET /:nodeId to avoid capture.
+router.get(
+  "/:nodeId/endorsements",
+  [
+    param("nodeId")
+      .isString()
+      .matches(/^[0-9a-f]{64}$/)
+      .withMessage("nodeId debe ser 64 hex chars"),
+  ],
+  async (req: Request, res: Response) => {
+    if (!validate(req, res)) return;
+    const nodeId = String(req.params["nodeId"] ?? "").trim();
+
+    // Verify node exists
+    const node = await getNodeByNodeId(nodeId);
+    if (!node) {
+      res.status(404).json({ error: "Nodo no encontrado en la red uni.id." });
+      return;
+    }
+
+    const [endorsements, stats] = await Promise.all([
+      getEndorsementsForNode(nodeId),
+      getEndorsementStats(nodeId),
+    ]);
+
+    res.json({
+      nodeId,
+      globalId: node.global_id,
+      currentReputation: parseFloat(node.node_reputation.toFixed(3)),
+      reputationLabel: reputationLabel(node.node_reputation),
+      endorsements: {
+        total: stats.totalEndorsements,
+        reputationFromEndorsements: stats.totalReputationFromEndorsements,
+        verifiedEndorsers: stats.verifiedEndorsers,
+        list: endorsements.map((e) => ({
+          id: e.id,
+          fromNodeId: e.from_node_id,
+          fromGlobalId: e.from_global_id ?? null,
+          fromReputation: e.from_reputation
+            ? parseFloat(e.from_reputation.toFixed(3))
+            : null,
+          fromVerified: e.from_verified ?? null,
+          reputationApplied: parseFloat(e.reputation_applied.toFixed(4)),
+          endorsedAt: e.created_at,
+        })),
+      },
+      network: "uni.id Trust Graph",
+      issuer: "human.id labs S.A.S.",
+    });
+  }
+);
+
+// ─── GET /node/:nodeId/given — endorsements given by this node ────────────────
+router.get(
+  "/:nodeId/given",
+  [
+    param("nodeId")
+      .isString()
+      .matches(/^[0-9a-f]{64}$/)
+      .withMessage("nodeId debe ser 64 hex chars"),
+  ],
+  async (req: Request, res: Response) => {
+    if (!validate(req, res)) return;
+    const nodeId = String(req.params["nodeId"] ?? "").trim();
+
+    const node = await getNodeByNodeId(nodeId);
+    if (!node) {
+      res.status(404).json({ error: "Nodo no encontrado en la red uni.id." });
+      return;
+    }
+
+    const given = await getEndorsementsByNode(nodeId);
+
+    res.json({
+      nodeId,
+      globalId: node.global_id,
+      endorsementsGiven: given.length,
+      list: given.map((e) => ({
+        id: e.id,
+        toNodeId: e.to_node_id,
+        reputationApplied: parseFloat(e.reputation_applied.toFixed(4)),
+        endorsedAt: e.created_at,
+      })),
     });
   }
 );
