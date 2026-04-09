@@ -107,7 +107,7 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { node, documents, avatarUri } = useIdentity();
+  const { node, documents, avatarUri, isOnline } = useIdentity();
   const { t } = useLanguage();
 
   const [empresaExpanded, setEmpresaExpanded] = useState(false);
@@ -272,6 +272,41 @@ export default function HomeScreen() {
               </Text>
               <Text style={styles.statLabel}>{t.coverage ?? "Cobertura"}</Text>
             </View>
+          </AnimatedPressable>
+        </Animated.View>
+
+        {/* ── USAR MI IDENTIDAD ── */}
+        <Animated.View style={[{ paddingHorizontal: Spacing.md, marginBottom: 16 }, a2]}>
+          <AnimatedPressable
+            onPress={() => {
+              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push("/use-identity");
+            }}
+            scale={0.97}
+          >
+            <LinearGradient
+              colors={["#0A1528", "#1A3F8F", "#1A6FE8"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={styles.useIdBtn}
+            >
+              <View style={styles.useIdLeft}>
+                <LinearGradient
+                  colors={["#00D4FF33", "#1A6FE833"]}
+                  style={styles.useIdIcon}
+                >
+                  <Feather name="zap" size={22} color="#00D4FF" />
+                </LinearGradient>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.useIdTitle}>USAR MI IDENTIDAD</Text>
+                  <Text style={styles.useIdSub}>
+                    {isOnline ? "Online · Offline · QR · Archivo" : "Modo offline disponible"}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.useIdArrow}>
+                <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.8)" />
+              </View>
+            </LinearGradient>
           </AnimatedPressable>
         </Animated.View>
 
@@ -686,6 +721,32 @@ const styles = StyleSheet.create({
   networkIcon: { width: 44, height: 44, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   networkTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
   networkSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+
+  // USAR MI IDENTIDAD button
+  useIdBtn: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 18, paddingVertical: 16, paddingHorizontal: 20, gap: 14,
+    shadowColor: "#1A6FE8", shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35, shadowRadius: 14, elevation: 10,
+  },
+  useIdLeft: { flexDirection: "row", alignItems: "center", gap: 14, flex: 1 },
+  useIdIcon: {
+    width: 48, height: 48, borderRadius: 14,
+    alignItems: "center", justifyContent: "center",
+  },
+  useIdTitle: {
+    fontSize: 15, fontFamily: "Inter_700Bold", color: "#fff",
+    letterSpacing: 0.5,
+  },
+  useIdSub: {
+    fontSize: 11, fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.65)", marginTop: 3,
+  },
+  useIdArrow: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center", justifyContent: "center",
+  },
 
   // SOS Button
   sosBtn: {
