@@ -6,6 +6,8 @@ import { logger } from "./lib/logger";
 import { checkSmtpOnStartup } from "./lib/email";
 import { runMigration } from "./lib/db";
 import { runFieldEncryptionMigration } from "./lib/dataMigration";
+import { retryPendingTsaRequests } from "./lib/tsa";
+import { computeStartupAnchors } from "./lib/dailyAnchor";
 
 // Puerto: usa PORT del .env o 8080 como default
 const port = Math.abs(Number(process.env["PORT"] ?? 8080)) || 8080;
@@ -14,6 +16,17 @@ const port = Math.abs(Number(process.env["PORT"] ?? 8080)) || 8080;
 if (process.env["DATABASE_URL"]) {
   runMigration()
     .then(() => runFieldEncryptionMigration())
+    .then(() => {
+      // Non-blocking background tasks after migrations
+      setImmediate(() => {
+        retryPendingTsaRequests().catch((err) =>
+          logger.warn({ err }, "[TSA] Startup retry failed")
+        );
+        computeStartupAnchors().catch((err) =>
+          logger.warn({ err }, "[Anchor] Startup anchor failed")
+        );
+      });
+    })
     .catch((err) => {
       logger.error({ err }, "❌ Migration failed — server starting anyway, DB endpoints may fail");
     });

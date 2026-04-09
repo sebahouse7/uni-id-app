@@ -47,6 +47,13 @@ ALTER TABLE public.uni_users ADD COLUMN IF NOT EXISTS signing_public_key text;
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS signature_type text DEFAULT 'hmac';
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS public_key_snapshot text;
 CREATE INDEX IF NOT EXISTS idx_doc_sigs_type ON public.uni_document_signatures USING btree (signature_type);
+ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_token text;
+ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_timestamp timestamp with time zone;
+ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_status text DEFAULT 'none';
+ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_endpoint text;
+CREATE INDEX IF NOT EXISTS idx_doc_sigs_tsa_status ON public.uni_document_signatures USING btree (tsa_status);
+CREATE TABLE IF NOT EXISTS public.daily_anchor (date date NOT NULL PRIMARY KEY,merkle_root text NOT NULL,signature_count integer DEFAULT 0 NOT NULL,computed_at timestamp with time zone DEFAULT now() NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_daily_anchor_date ON public.daily_anchor USING btree (date DESC);
 `;
 
 export async function runMigration(): Promise<void> {

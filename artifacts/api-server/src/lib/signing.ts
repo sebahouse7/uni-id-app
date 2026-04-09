@@ -109,6 +109,11 @@ export interface SignatureRecord {
   public_key_snapshot: string | null;
   created_at: string;
   consented: boolean;
+  // TSA fields (added progressively — may be null for pre-TSA records)
+  tsa_token: string | null;
+  tsa_timestamp: string | null;
+  tsa_status: string | null;   // 'none' | 'pending' | 'verified' | 'failed'
+  tsa_endpoint: string | null;
 }
 
 export interface SignDocumentParams {
@@ -154,10 +159,12 @@ export async function signDocument(params: SignDocumentParams): Promise<Signatur
   const row = await queryOne<SignatureRecord>(
     `INSERT INTO uni_document_signatures
        (user_id, document_id, document_hash, signature, algorithm, signature_type,
-        public_key_snapshot, signer_global_id, ip_address, device_id, consented, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        public_key_snapshot, signer_global_id, ip_address, device_id, consented, metadata,
+        tsa_status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending')
      RETURNING id, document_hash, signature, algorithm, signature_type, public_key_snapshot,
-               signer_global_id, created_at, consented`,
+               signer_global_id, created_at, consented,
+               tsa_token, tsa_timestamp, tsa_status, tsa_endpoint`,
     [
       userId, documentId ?? null, contentHash, signature, algorithm, signatureType,
       publicKeySnapshot ?? null, signerGlobalId ?? null, ip ?? null,
@@ -168,12 +175,16 @@ export async function signDocument(params: SignDocumentParams): Promise<Signatur
   return row!;
 }
 
+const SIG_COLS = `
+  id, document_hash, signature, algorithm, signature_type, public_key_snapshot,
+  signer_global_id, created_at, consented,
+  tsa_token, tsa_timestamp, tsa_status, tsa_endpoint
+`;
+
 /** Look up all signatures for a given document hash (all types). */
 export async function getSignaturesForHash(documentHash: string): Promise<SignatureRecord[]> {
   return query<SignatureRecord>(
-    `SELECT id, document_hash, signature, algorithm, signature_type, public_key_snapshot,
-            signer_global_id, created_at, consented
-     FROM uni_document_signatures
+    `SELECT ${SIG_COLS} FROM uni_document_signatures
      WHERE document_hash = $1
      ORDER BY created_at DESC`,
     [documentHash]
@@ -183,9 +194,7 @@ export async function getSignaturesForHash(documentHash: string): Promise<Signat
 /** Look up all signatures created by a user. */
 export async function getUserSignatures(userId: string, limit = 50): Promise<SignatureRecord[]> {
   return query<SignatureRecord>(
-    `SELECT id, document_hash, signature, algorithm, signature_type, public_key_snapshot,
-            signer_global_id, created_at, consented
-     FROM uni_document_signatures
+    `SELECT ${SIG_COLS} FROM uni_document_signatures
      WHERE user_id = $1
      ORDER BY created_at DESC
      LIMIT $2`,

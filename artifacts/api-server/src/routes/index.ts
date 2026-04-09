@@ -12,6 +12,7 @@ import shareRouter from "./share";
 import businessRouter from "./business";
 import identityRouter from "./identity";
 import signaturesRouter from "./signatures";
+import anchorRouter from "./anchor";
 import { generalLimiter } from "../middlewares/rateLimit";
 import { queryOne } from "../lib/db";
 import { decryptFieldAsync } from "../lib/keyManager";
@@ -33,6 +34,7 @@ router.use("/share", shareRouter);
 router.use("/businesses", businessRouter);
 router.use("/identity", identityRouter);
 router.use("/signatures", signaturesRouter);
+router.use("/anchor", anchorRouter);
 
 // ─── GET /users/:userId/public-key — obtener clave pública Ed25519 (público) ──
 router.get("/users/:userId/public-key", async (req: Request, res: Response) => {

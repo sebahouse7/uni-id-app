@@ -20,6 +20,7 @@ import {
   getUserPublicKey,
   getKeyFingerprint,
 } from "../lib/signing";
+import { requestTimestamp, saveTsaResult, markTsaPending, verifyTsaToken } from "../lib/tsa";
 import { log } from "../lib/audit";
 
 const router = Router();
@@ -129,6 +130,7 @@ router.post(
       },
     });
 
+    // ── Respond immediately — TSA request runs in background ────────────────
     res.status(201).json({
       signatureId: record.id,
       documentHash: record.document_hash,
@@ -141,6 +143,26 @@ router.post(
         : null,
       consented: record.consented,
       createdAt: record.created_at,
+      // TSA: client should poll /signatures/mine to see final tsa_status
+      tsaStatus: "pending",
+      tsaNote: "Timestamp criptográfico RFC 3161 en proceso. Verificá el estado en unos segundos.",
+    });
+
+    // ── Async TSA request — does NOT block the HTTP response ─────────────────
+    const signatureId = record.id;
+    const documentHash = record.document_hash;
+    setImmediate(async () => {
+      try {
+        const tsaResult = await requestTimestamp(documentHash);
+        if (tsaResult) {
+          await saveTsaResult(signatureId, tsaResult);
+        } else {
+          await markTsaPending(signatureId);
+        }
+      } catch (err: any) {
+        console.warn(`[TSA] Background request failed for ${signatureId}:`, err?.message);
+        try { await markTsaPending(signatureId); } catch {}
+      }
     });
   }
 );
@@ -151,16 +173,7 @@ router.get("/mine", requireAuth, async (req: Request, res: Response) => {
   const limit = Math.min(parseInt(String(req.query["limit"] ?? "50"), 10), 200);
   const signatures = await getUserSignatures(userId, limit);
   res.json({
-    signatures: signatures.map((r) => ({
-      id: r.id,
-      documentHash: r.document_hash,
-      algorithm: r.algorithm,
-      signatureType: r.signature_type,
-      signerGlobalId: r.signer_global_id,
-      publicKeyFingerprint: r.public_key_snapshot ? getKeyFingerprint(r.public_key_snapshot) : null,
-      consented: r.consented,
-      createdAt: r.created_at,
-    })),
+    signatures: signatures.map(formatRecord),
     count: signatures.length,
   });
 });
@@ -206,18 +219,21 @@ router.post(
     let verified = false;
     let signatureType = "unknown";
     let reason = "Firma inválida o adulterada";
+    let matchedRecord: (typeof records)[0] | undefined;
 
     for (const record of records) {
       if (record.signature_type === "ed25519") {
         // Use public key from: request body > record snapshot > DB lookup
-        const pubKey = reqPubKey
-          ?? record.public_key_snapshot
-          ?? (reqUserId ? await getUserPublicKey(reqUserId) : null);
+        const pubKey =
+          reqPubKey ??
+          record.public_key_snapshot ??
+          (reqUserId ? await getUserPublicKey(reqUserId) : null);
 
         if (pubKey && verifyEd25519(documentHash, signature, pubKey)) {
           verified = true;
           signatureType = "ed25519";
           reason = "Firma Ed25519 válida — verificada con clave pública del usuario";
+          matchedRecord = record;
           break;
         }
       } else if (record.signature_type === "hmac" || !record.signature_type) {
@@ -225,15 +241,56 @@ router.post(
           verified = true;
           signatureType = "hmac";
           reason = "Firma HMAC válida — verificada con clave del sistema";
+          matchedRecord = record;
           break;
         }
       }
+    }
+
+    // ── TSA verification (if matched record has a stored token) ──────────────
+    let tsaVerification: {
+      status: string;
+      timestamp: string | null;
+      hashMatch: boolean | null;
+      reason: string;
+      endpoint: string | null;
+    } | null = null;
+
+    if (matchedRecord?.tsa_token && matchedRecord.tsa_status === "verified") {
+      const tsaResult = verifyTsaToken(matchedRecord.tsa_token, documentHash);
+      tsaVerification = {
+        status: tsaResult.valid ? "valid" : "invalid",
+        timestamp: tsaResult.timestamp?.toISOString() ?? null,
+        hashMatch: tsaResult.hashMatch,
+        reason: tsaResult.reason,
+        endpoint: matchedRecord.tsa_endpoint ?? null,
+      };
+      if (tsaResult.valid) {
+        reason += ` + Timestamp RFC 3161 externo verificado (${tsaResult.timestamp?.toISOString()})`;
+      }
+    } else if (matchedRecord?.tsa_status === "pending") {
+      tsaVerification = {
+        status: "pending",
+        timestamp: null,
+        hashMatch: null,
+        reason: "Timestamp TSA en proceso — volvé a verificar en unos minutos",
+        endpoint: null,
+      };
+    } else if (matchedRecord?.tsa_status === "none" || !matchedRecord?.tsa_status) {
+      tsaVerification = {
+        status: "not_requested",
+        timestamp: null,
+        hashMatch: null,
+        reason: "Esta firma no tiene timestamp criptográfico externo (registro anterior al sistema TSA)",
+        endpoint: null,
+      };
     }
 
     res.json({
       verified,
       signatureType,
       reason,
+      tsa: tsaVerification,
       records: records.map(formatRecord),
     });
   }
@@ -242,12 +299,18 @@ router.post(
 function formatRecord(r: any) {
   return {
     id: r.id,
+    documentHash: r.document_hash,
     algorithm: r.algorithm,
     signatureType: r.signature_type ?? "hmac",
     signerGlobalId: r.signer_global_id,
     publicKeyFingerprint: r.public_key_snapshot ? getKeyFingerprint(r.public_key_snapshot) : null,
     consented: r.consented,
     createdAt: r.created_at,
+    // TSA timestamp fields
+    tsaStatus: r.tsa_status ?? "none",
+    tsaTimestamp: r.tsa_timestamp ?? null,
+    tsaEndpoint: r.tsa_endpoint ?? null,
+    // tsa_token is NOT returned in list endpoints (too large) — available via /verify
   };
 }
 
