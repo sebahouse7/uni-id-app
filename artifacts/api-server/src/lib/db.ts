@@ -68,10 +68,12 @@ CREATE TABLE IF NOT EXISTS public.verification_votes (
   weight double precision DEFAULT 0 NOT NULL,
   penalty_applied boolean DEFAULT false NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
+  timestamp_ms bigint DEFAULT 0 NOT NULL,
   CONSTRAINT verification_votes_unique UNIQUE (node_id, target_hash)
 );
 CREATE INDEX IF NOT EXISTS idx_verification_votes_hash ON public.verification_votes USING btree (target_hash);
 CREATE INDEX IF NOT EXISTS idx_verification_votes_node ON public.verification_votes USING btree (node_id);
+ALTER TABLE public.verification_votes ADD COLUMN IF NOT EXISTS timestamp_ms bigint DEFAULT 0 NOT NULL;
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_token text;
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_timestamp timestamp with time zone;
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_status text DEFAULT 'none';
