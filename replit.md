@@ -250,6 +250,8 @@ Expo React Native mobile app — **uni.id** by human.id labs S.A.S. (Sebastián 
 
 **Key wrapping (DEK system):** `src/lib/keyManager.ts` — each user has a random 256-bit DEK (Data Encryption Key). DEK stored wrapped (AES-256-GCM encrypted) by server master key in `uni_user_keys`. Documents encrypted with DEK. Key rotation = re-wrap DEK only, no document re-encryption. Recovery doesn't break encryption because keys are server-side.
 
+**ENCRYPTION_MASTER_KEY set on Railway** (done 2026-04-09): Key = 553c3bee...cbcf8b9d (32 bytes / 64 hex). Previously the master key was derived from JWT_SECRET at runtime (less secure). Migration in `deploy/railway-api/migrate.mjs` automatically re-wraps all existing DEKs at server startup (idempotent: tries new key first, falls back to old JWT_SECRET-derived key). `deploy/railway-api/rotate-master-key.mjs` = standalone CLI tool for manual rotation against any DB.
+
 **Ownership middleware:** `src/middlewares/ownershipCheck.ts` — `verifyOwnership(table)` applied to every resource route. Cross-user access attempts trigger a `critical` audit event + `critical` security event in DB.
 
 **Persistent security logs:** `uni_audit_logs` (all operations), `uni_security_events` (security incidents). Both queryable via `/api/monitor/my-activity` and `/api/monitor/security-events` with filters (severity, event, from, to, limit).

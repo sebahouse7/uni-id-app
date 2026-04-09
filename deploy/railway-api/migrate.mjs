@@ -224,7 +224,112 @@ CREATE INDEX IF NOT EXISTS idx_access_requests_owner ON public.uni_access_reques
 ALTER TABLE public.uni_access_requests ADD COLUMN IF NOT EXISTS consented_at timestamptz;
 ALTER TABLE public.uni_access_requests ADD COLUMN IF NOT EXISTS shared_data jsonb;
 ALTER TABLE public.uni_access_requests ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
+
+-- Extend uni_user_keys for DEK rotation tracking
+ALTER TABLE public.uni_user_keys ADD COLUMN IF NOT EXISTS key_version int NOT NULL DEFAULT 1;
+ALTER TABLE public.uni_user_keys ADD COLUMN IF NOT EXISTS rotated_at timestamptz;
 `;
+
+// ─── DEK rotation helpers ─────────────────────────────────────────────────────
+
+import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto";
+
+const AES_ALGO = "aes-256-gcm";
+const IV_LEN = 16;
+const TAG_LEN = 16;
+const KEY_LEN = 32;
+
+function deriveKeyFromJwtSecret(jwtSecret) {
+  return createHash("sha256")
+    .update("uniid::dek::master::" + jwtSecret + "::v1")
+    .digest();
+}
+
+function tryUnwrapDEK(wrapped, masterKey) {
+  try {
+    const buf = Buffer.from(wrapped, "base64");
+    const iv = buf.subarray(0, IV_LEN);
+    const tag = buf.subarray(IV_LEN, IV_LEN + TAG_LEN);
+    const enc = buf.subarray(IV_LEN + TAG_LEN);
+    const decipher = createDecipheriv(AES_ALGO, masterKey, iv);
+    decipher.setAuthTag(tag);
+    const dek = Buffer.concat([decipher.update(enc), decipher.final()]);
+    if (dek.length !== KEY_LEN) return null;
+    return dek;
+  } catch {
+    return null;
+  }
+}
+
+function wrapDEK(dek, masterKey) {
+  const iv = randomBytes(IV_LEN);
+  const cipher = createCipheriv(AES_ALGO, masterKey, iv);
+  const enc = Buffer.concat([cipher.update(dek), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, enc]).toString("base64");
+}
+
+async function rotateDEKsIfNeeded(client) {
+  const newMasterHex = process.env.ENCRYPTION_MASTER_KEY;
+  if (!newMasterHex || newMasterHex.length < 64) {
+    console.log("ℹ️  ENCRYPTION_MASTER_KEY not set — skipping DEK rotation.");
+    console.log("   ⚠️  Documents are encrypted with JWT_SECRET-derived key (less secure).");
+    return;
+  }
+
+  const newMaster = Buffer.from(newMasterHex.slice(0, 64), "hex");
+  const jwtSecret = process.env.JWT_SECRET ?? "uniid_default_fallback_key_change_in_production_2024";
+  const oldMaster = deriveKeyFromJwtSecret(jwtSecret);
+
+  const { rows } = await client.query(
+    `SELECT user_id, wrapped_dek, key_version FROM uni_user_keys`
+  );
+
+  if (rows.length === 0) {
+    console.log("ℹ️  No DEKs found — skipping rotation.");
+    return;
+  }
+
+  let alreadyRotated = 0;
+  let rotated = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    // Try new master first — if it works, already rotated
+    const dekWithNew = tryUnwrapDEK(row.wrapped_dek, newMaster);
+    if (dekWithNew) {
+      alreadyRotated++;
+      continue;
+    }
+
+    // Try old master (JWT_SECRET-derived)
+    const dekWithOld = tryUnwrapDEK(row.wrapped_dek, oldMaster);
+    if (!dekWithOld) {
+      failed++;
+      console.error(`   ✗ user ${row.user_id.slice(0, 8)}... DEK unreadable with both keys — SKIPPED`);
+      continue;
+    }
+
+    // Re-wrap with new master
+    const newWrapped = wrapDEK(dekWithOld, newMaster);
+    await client.query(
+      `UPDATE uni_user_keys
+       SET wrapped_dek = $1, rotated_at = NOW(), key_version = key_version + 1
+       WHERE user_id = $2`,
+      [newWrapped, row.user_id]
+    );
+    rotated++;
+  }
+
+  if (rotated > 0 || alreadyRotated > 0) {
+    console.log(`🔑 DEK rotation: ${rotated} rotated, ${alreadyRotated} already up-to-date${failed > 0 ? `, ${failed} failed` : ""}.`);
+  }
+  if (failed > 0) {
+    console.warn(`   ⚠️  ${failed} DEK(s) could not be rotated.`);
+  }
+}
+
+// ─── Main migration ───────────────────────────────────────────────────────────
 
 async function migrate() {
   let client;
@@ -234,10 +339,11 @@ async function migrate() {
     console.log("🔄 Running schema migration...");
     await client.query(SCHEMA_SQL);
     console.log("✅ Schema migration complete.");
+    await rotateDEKsIfNeeded(client);
   } catch (err) {
     console.error("❌ Migration failed:", err.message);
     console.error("   Full error:", err);
-    process.exit(1);  // Fail fast so Railway marks deploy as failed
+    process.exit(1);
   } finally {
     if (client) client.release();
     await pool.end().catch(() => {});
