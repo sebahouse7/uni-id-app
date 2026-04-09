@@ -1,12 +1,16 @@
 import express, { type Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { createReadStream, statSync } from "fs";
-import { join, resolve } from "path";
+import { join, resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app: Express = express();
 
@@ -121,6 +125,13 @@ app.get("/api/download/uni-id.apk", (_req: Request, res: Response) => {
     }
   }
   res.status(404).json({ error: "APK not available — run a new build to generate it" });
+});
+
+// ─── Web frontend (static build) ─────────────────────────────────────────────
+const webDistPath = join(resolve(__dirname, "../../.."), "artifacts/uni-web/dist/public");
+app.use("/uni-web", express.static(webDistPath, { maxAge: "1h", etag: true }));
+app.get("/uni-web/{*path}", (_req: Request, res: Response) => {
+  res.sendFile(join(webDistPath, "index.html"));
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────

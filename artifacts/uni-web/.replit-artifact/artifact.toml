@@ -12,10 +12,10 @@ version = "1.0.0"
 [[services]]
 name = "web"
 paths = [ "/uni-web/" ]
-localPort = 3000
+localPort = 8080
 
 [services.development]
-run = "node /home/runner/workspace/artifacts/uni-web/start.mjs"
+run = "echo 'served by api-server'"
 
 [services.production]
 build = [ "pnpm", "--filter", "@workspace/uni-web", "run", "build" ]
@@ -27,5 +27,4 @@ from = "/*"
 to = "/index.html"
 
 [services.env]
-PORT = "3000"
 BASE_PATH = "/uni-web/"
