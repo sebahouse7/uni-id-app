@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/uni-web/"
+title = "uni.id Web"
+version = "1.0.0"
+id = "artifacts/uni-web"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/uni-web/" ]
+localPort = 3000
+
+[services.development]
+run = "node /home/runner/workspace/artifacts/uni-web/start.mjs"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/uni-web", "run", "build" ]
+publicDir = "artifacts/uni-web/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "3000"
+BASE_PATH = "/uni-web/"

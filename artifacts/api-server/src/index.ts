@@ -8,6 +8,7 @@ import { runMigration } from "./lib/db";
 import { runFieldEncryptionMigration } from "./lib/dataMigration";
 import { retryPendingTsaRequests } from "./lib/tsa";
 import { computeStartupAnchors } from "./lib/dailyAnchor";
+import { startAutonomousNode } from "./lib/autonomousNode";
 
 // Puerto: usa PORT del .env o 8080 como default
 const port = Math.abs(Number(process.env["PORT"] ?? 8080)) || 8080;
@@ -24,6 +25,9 @@ if (process.env["DATABASE_URL"]) {
         );
         computeStartupAnchors().catch((err) =>
           logger.warn({ err }, "[Anchor] Startup anchor failed")
+        );
+        startAutonomousNode().catch((err) =>
+          logger.warn({ err }, "[AutonomousNode] Startup failed")
         );
       });
     })

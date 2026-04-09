@@ -17,6 +17,7 @@ import evidenceRouter from "./evidence";
 import nodeRouter from "./node";
 import consensusRouter from "./consensus";
 import stakeRouter from "./stake";
+import verifyRouter from "./verify";
 import { generalLimiter } from "../middlewares/rateLimit";
 import { queryOne } from "../lib/db";
 import { decryptFieldAsync } from "../lib/keyManager";
@@ -45,6 +46,7 @@ router.use("/node", nodeRouter);
 // so that /verify/vote, /verify/result/:hash, /verify/votes/:hash are matched first.
 // Express passes unmatched requests to the next handler automatically.
 router.use("/verify", consensusRouter);
+router.use("/verify", verifyRouter);
 router.use("/stake", stakeRouter);
 
 // ─── GET /users/:userId/public-key — obtener clave pública Ed25519 (público) ──

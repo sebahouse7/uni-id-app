@@ -95,6 +95,11 @@ CREATE TABLE IF NOT EXISTS public.stake_transactions (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_stake_txn_user ON public.stake_transactions USING btree (user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS public.system_config (key text NOT NULL PRIMARY KEY,value text NOT NULL,created_at timestamp with time zone DEFAULT now() NOT NULL,updated_at timestamp with time zone DEFAULT now() NOT NULL);
+CREATE TABLE IF NOT EXISTS public.pending_verifications (id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,file_hash text NOT NULL UNIQUE,submitter_ip text,status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','consensus_reached','no_consensus')),consensus_result text,confidence double precision,votes_collected integer DEFAULT 0,created_at timestamp with time zone DEFAULT now() NOT NULL,updated_at timestamp with time zone DEFAULT now() NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_pending_verifications_status ON public.pending_verifications USING btree (status, created_at ASC);
+CREATE TABLE IF NOT EXISTS public.node_memory (id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,node_id text NOT NULL,target_hash text NOT NULL,decision text NOT NULL CHECK (decision IN ('valid','invalid','skipped')),confidence double precision NOT NULL,was_correct boolean,created_at timestamp with time zone DEFAULT now() NOT NULL,CONSTRAINT node_memory_unique UNIQUE (node_id, target_hash));
+CREATE INDEX IF NOT EXISTS idx_node_memory_node ON public.node_memory USING btree (node_id, created_at DESC);
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_token text;
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_timestamp timestamp with time zone;
 ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_status text DEFAULT 'none';
