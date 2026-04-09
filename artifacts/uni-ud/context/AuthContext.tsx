@@ -20,9 +20,28 @@ import {
 const LOCK_TIMEOUT_MS = 3 * 60 * 1000;
 const FAIL_COUNT_KEY = "uni_id_pin_fails_v1";
 const LOCKED_UNTIL_KEY = "uni_id_pin_locked_until_v1";
+const LOCKOUT_COUNT_KEY = "uni_id_lockout_count_v1";
+const NEXT_ATTEMPT_KEY = "uni_id_next_attempt_v1";
 const BIOMETRICS_ENABLED_KEY = "uni_id_biometrics_enabled_v1";
+
 const MAX_FAILS = 5;
-const LOCKOUT_DURATION_MS = 30 * 1000;
+
+/**
+ * Escalating lockout duration.
+ * n=0 → 30s, n=1 → 60s, n=2 → 120s, n=3 → 240s, n=4 → 480s, n≥5 → capped at 3600s (1h)
+ */
+function lockoutDurationMs(lockoutCount: number): number {
+  return Math.min(30 * Math.pow(2, lockoutCount), 3600) * 1000;
+}
+
+/**
+ * Progressive delay between failed attempts (before next try is allowed).
+ * failCount = number of fails so far (post-increment).
+ * 1 fail → 1s, 2 → 2s, 3 → 4s, 4 → 8s, 5+ → lockout
+ */
+function attemptDelayMs(failCount: number): number {
+  return Math.min(30, Math.pow(2, failCount - 1)) * 1000;
+}
 
 interface AuthContextType {
   isLoading: boolean;
@@ -33,6 +52,7 @@ interface AuthContextType {
   hasPin: boolean;
   failedAttempts: number;
   lockedUntil: number | null;
+  nextAttemptAt: number | null;
   unlock: () => Promise<boolean>;
   setPin: (pin: string) => Promise<void>;
   verifyPin: (pin: string) => Promise<boolean>;
@@ -51,6 +71,7 @@ const AuthContext = createContext<AuthContextType>({
   hasPin: false,
   failedAttempts: 0,
   lockedUntil: null,
+  nextAttemptAt: null,
   unlock: async () => true,
   setPin: async () => {},
   verifyPin: async () => false,
@@ -69,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLocked, setIsLocked] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [nextAttemptAt, setNextAttemptAt] = useState<number | null>(null);
   const [successState, setSuccessState] = useState(false);
 
   const lastActiveRef = useRef(Date.now());
@@ -98,7 +120,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const biometricsAvailable = compatible && enrolled;
       setHasBiometrics(biometricsAvailable);
 
-      // Only use biometrics if user explicitly enabled them in the app
       const bioEnabledStr = await secureGet(BIOMETRICS_ENABLED_KEY).catch(() => null);
       const bioEnabled = bioEnabledStr === "true" && biometricsAvailable;
       setBiometricsEnabled(bioEnabled);
@@ -107,11 +128,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setHasPin(!!storedPin);
 
       try {
-        const failCount = parseInt(
-          (await secureGet(FAIL_COUNT_KEY)) ?? "0",
-          10
-        );
+        const failCount = parseInt((await secureGet(FAIL_COUNT_KEY)) ?? "0", 10);
         const lockedUntilStr = await secureGet(LOCKED_UNTIL_KEY);
+        const nextAttemptStr = await secureGet(NEXT_ATTEMPT_KEY);
+
         if (lockedUntilStr) {
           const lockedUntilTs = parseInt(lockedUntilStr, 10);
           if (lockedUntilTs > Date.now()) {
@@ -121,10 +141,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await secureDelete(LOCKED_UNTIL_KEY);
             await secureDelete(FAIL_COUNT_KEY);
           }
+        } else if (failCount > 0) {
+          setFailedAttempts(failCount);
+        }
+
+        if (nextAttemptStr) {
+          const nextAttemptTs = parseInt(nextAttemptStr, 10);
+          if (nextAttemptTs > Date.now()) {
+            setNextAttemptAt(nextAttemptTs);
+          } else {
+            await secureDelete(NEXT_ATTEMPT_KEY);
+          }
         }
       } catch {}
 
-      // Only attempt biometric if user explicitly enabled it
       if (bioEnabled) {
         const success = await attemptBiometric();
         if (!success) {
@@ -138,7 +168,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // No PIN and no biometrics enabled — first-time user, lock so they can create a PIN
       setIsLocked(true);
     } catch {
       setIsAuthenticated(true);
@@ -216,14 +245,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setHasPin(true);
   }, []);
 
-  const isCurrentlyLocked = () => {
-    if (!lockedUntil) return false;
-    return lockedUntil > Date.now();
-  };
-
   const verifyPin = useCallback(
     async (input: string): Promise<boolean> => {
-      if (isCurrentlyLocked()) return false;
+      if (lockedUntil && lockedUntil > Date.now()) return false;
+      if (nextAttemptAt && nextAttemptAt > Date.now()) return false;
 
       try {
         const ok = await validatePin(input);
@@ -231,8 +256,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (ok) {
           await secureDelete(FAIL_COUNT_KEY);
           await secureDelete(LOCKED_UNTIL_KEY);
+          await secureDelete(NEXT_ATTEMPT_KEY);
           setFailedAttempts(0);
           setLockedUntil(null);
+          setNextAttemptAt(null);
           await showSuccessAndUnlock();
           return true;
         } else {
@@ -241,19 +268,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await secureSet(FAIL_COUNT_KEY, String(newCount));
 
           if (newCount >= MAX_FAILS) {
-            const until = Date.now() + LOCKOUT_DURATION_MS;
+            const lockoutCountStr = await secureGet(LOCKOUT_COUNT_KEY).catch(() => null);
+            const lockoutCount = parseInt(lockoutCountStr ?? "0", 10);
+            const duration = lockoutDurationMs(lockoutCount);
+            const until = Date.now() + duration;
+
             setLockedUntil(until);
-            await secureSet(LOCKED_UNTIL_KEY, String(until));
+            setNextAttemptAt(null);
             setFailedAttempts(0);
+
+            await secureSet(LOCKED_UNTIL_KEY, String(until));
+            await secureSet(LOCKOUT_COUNT_KEY, String(lockoutCount + 1));
             await secureDelete(FAIL_COUNT_KEY);
+            await secureDelete(NEXT_ATTEMPT_KEY);
+          } else {
+            const delay = attemptDelayMs(newCount);
+            const nextAt = Date.now() + delay;
+            setNextAttemptAt(nextAt);
+            await secureSet(NEXT_ATTEMPT_KEY, String(nextAt));
           }
+
           return false;
         }
       } catch {
         return false;
       }
     },
-    [failedAttempts, lockedUntil]
+    [failedAttempts, lockedUntil, nextAttemptAt]
   );
 
   const lock = useCallback(() => {
@@ -283,6 +324,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasPin,
         failedAttempts,
         lockedUntil,
+        nextAttemptAt,
         unlock,
         setPin: setPinFn,
         verifyPin,

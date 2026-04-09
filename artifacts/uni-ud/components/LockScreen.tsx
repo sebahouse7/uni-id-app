@@ -18,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 
 const LOGO = require("../assets/images/logo-uniid.png");
 const PIN_LENGTH = 6;
+const MAX_FAILS = 5;
 
 function Countdown({ lockedUntil, onExpire }: { lockedUntil: number; onExpire: () => void }) {
   const [seconds, setSeconds] = useState(Math.ceil((lockedUntil - Date.now()) / 1000));
@@ -26,7 +27,20 @@ function Countdown({ lockedUntil, onExpire }: { lockedUntil: number; onExpire: (
     const t = setTimeout(() => setSeconds((s) => s - 1), 1000);
     return () => clearTimeout(t);
   }, [seconds]);
-  return <Text style={styles.lockoutText}>Bloqueado por {seconds}s</Text>;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  const display = mins > 0 ? `${mins}m ${secs}s` : `${seconds}s`;
+  return <Text style={styles.lockoutText}>Bloqueado — esperá {display}</Text>;
+}
+
+function DelayCountdown({ nextAttemptAt, onExpire }: { nextAttemptAt: number; onExpire: () => void }) {
+  const [seconds, setSeconds] = useState(Math.ceil((nextAttemptAt - Date.now()) / 1000));
+  useEffect(() => {
+    if (seconds <= 0) { onExpire(); return; }
+    const t = setTimeout(() => setSeconds((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [seconds]);
+  return <Text style={styles.delayText}>Esperá {seconds}s antes del próximo intento</Text>;
 }
 
 function PulsingRing({ animate }: { animate: boolean }) {
@@ -63,7 +77,7 @@ export function LockScreen() {
   const insets = useSafeAreaInsets();
   const {
     unlock, hasBiometrics, biometricsEnabled, hasPin,
-    verifyPin, setPin, failedAttempts, lockedUntil, successState,
+    verifyPin, setPin, failedAttempts, lockedUntil, nextAttemptAt, successState,
   } = useAuth();
 
   const canUseBiometrics = hasBiometrics && biometricsEnabled;
@@ -75,6 +89,9 @@ export function LockScreen() {
   const [step, setStep] = useState<"enter" | "confirm">("enter");
   const [error, setError] = useState("");
   const [isLocked, setIsLocked] = useState(lockedUntil != null && lockedUntil > Date.now());
+  const [isDelayed, setIsDelayed] = useState(
+    nextAttemptAt != null && nextAttemptAt > Date.now()
+  );
   const bioAutoTriggeredRef = useRef(false);
 
   useEffect(() => {
@@ -87,6 +104,10 @@ export function LockScreen() {
   useEffect(() => {
     setIsLocked(lockedUntil != null && lockedUntil > Date.now());
   }, [lockedUntil]);
+
+  useEffect(() => {
+    setIsDelayed(nextAttemptAt != null && nextAttemptAt > Date.now());
+  }, [nextAttemptAt]);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;
@@ -105,7 +126,7 @@ export function LockScreen() {
   };
 
   const handlePinDigit = async (digit: string) => {
-    if (isLocked) return;
+    if (isLocked || isDelayed) return;
     const next = pin + digit;
     setInputPin(next);
     setError("");
@@ -132,11 +153,13 @@ export function LockScreen() {
         const ok = await verifyPin(next);
         if (!ok) {
           shake();
-          const remaining = 5 - (failedAttempts + 1);
-          setError(remaining > 0
-            ? `PIN incorrecto · ${remaining} intento${remaining !== 1 ? "s" : ""} restante${remaining !== 1 ? "s" : ""}`
-            : "Cuenta bloqueada temporalmente");
-          if (remaining <= 0) setIsLocked(true);
+          const newFails = failedAttempts + 1;
+          const remaining = MAX_FAILS - newFails;
+          if (remaining > 0) {
+            setError(`PIN incorrecto · ${remaining} intento${remaining !== 1 ? "s" : ""} restante${remaining !== 1 ? "s" : ""}`);
+          } else {
+            setIsLocked(true);
+          }
           setInputPin("");
         }
       }
@@ -271,12 +294,19 @@ export function LockScreen() {
             ))}
           </Animated.View>
 
-          {/* Error / lockout */}
+          {/* Error / lockout / delay */}
           {isLocked && lockedUntil ? (
             <View style={styles.lockoutBadge}>
               <Countdown
                 lockedUntil={lockedUntil}
                 onExpire={() => { setIsLocked(false); setError(""); setInputPin(""); }}
+              />
+            </View>
+          ) : isDelayed && nextAttemptAt ? (
+            <View style={styles.lockoutBadge}>
+              <DelayCountdown
+                nextAttemptAt={nextAttemptAt}
+                onExpire={() => { setIsDelayed(false); setError(""); }}
               />
             </View>
           ) : error ? (
@@ -286,14 +316,14 @@ export function LockScreen() {
           )}
 
           {/* Keypad */}
-          <View style={[styles.keypad, { opacity: isLocked ? 0.4 : 1 }]}>
+          <View style={[styles.keypad, { opacity: (isLocked || isDelayed) ? 0.4 : 1 }]}>
             {digits.map((row, ri) => (
               <View key={ri} style={styles.keyRow}>
                 {row.map((d, di) => (
                   <Pressable
                     key={di}
                     onPress={() => {
-                      if (isLocked) return;
+                      if (isLocked || isDelayed) return;
                       if (d === "del") handleDelete();
                       else if (d !== "") handlePinDigit(d);
                     }}
@@ -490,6 +520,11 @@ const styles = StyleSheet.create({
   },
   lockoutText: {
     color: "#EF4444",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
+  delayText: {
+    color: "#F59E0B",
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
   },

@@ -2,16 +2,23 @@ import { Router, Request, Response } from "express";
 import { randomBytes } from "crypto";
 import { requireAuth } from "../middlewares/auth";
 import { query, queryOne } from "../lib/db";
-import { log } from "../lib/audit";
+import { log, detectAndLogAnomaly } from "../lib/audit";
+import { requestAccessLimiter, createQrLimiter } from "../middlewares/rateLimit";
 
 const router = Router();
+
+const TOKEN_REGEX = /^[0-9a-f]{48}$/;
 
 function generateToken(): string {
   return randomBytes(24).toString("hex");
 }
 
+function isValidToken(token: unknown): token is string {
+  return typeof token === "string" && TOKEN_REGEX.test(token);
+}
+
 // ─── POST /share/create-qr ────────────────────────────────────────────────────
-router.post("/create-qr", requireAuth, async (req: Request, res: Response) => {
+router.post("/create-qr", requireAuth, createQrLimiter, async (req: Request, res: Response) => {
   const userId = req.user!.sub;
   const {
     permissions = { name: true, globalId: true, bio: false, networkPlan: false },
@@ -61,14 +68,30 @@ router.post("/create-qr", requireAuth, async (req: Request, res: Response) => {
 });
 
 // ─── POST /share/request-access (público) ────────────────────────────────────
-router.post("/request-access", async (req: Request, res: Response) => {
+router.post("/request-access", requestAccessLimiter, async (req: Request, res: Response) => {
   const { token, requesterDevice } = req.body as {
     token: string;
     requesterDevice?: string;
   };
 
-  if (!token || typeof token !== "string") {
-    res.status(400).json({ error: "Token requerido" });
+  const ip = req.ip ?? "unknown";
+
+  if (!isValidToken(token)) {
+    await log({
+      event: "share.access_invalid_token",
+      severity: "warn",
+      ip,
+      metadata: { reason: "invalid_format", result: "rejected" },
+    });
+    await detectAndLogAnomaly({
+      ip,
+      eventPattern: "share.access_invalid%",
+      anomalyEvent: "security.token_scan_detected",
+      threshold: 3,
+      windowMinutes: 5,
+      metadata: { type: "invalid_token_format" },
+    });
+    res.status(400).json({ error: "Token inválido" });
     return;
   }
 
@@ -79,9 +102,46 @@ router.post("/request-access", async (req: Request, res: Response) => {
     [token]
   );
 
-  if (!shareRow) { res.status(404).json({ error: "Token inválido o no encontrado" }); return; }
-  if (shareRow.revoked) { res.status(410).json({ error: "Este token fue revocado" }); return; }
-  if (new Date(shareRow.expires_at) < new Date()) { res.status(410).json({ error: "Este token expiró" }); return; }
+  if (!shareRow) {
+    await log({
+      event: "share.access_invalid_token",
+      severity: "warn",
+      ip,
+      metadata: { reason: "not_found", token: token.slice(0, 8) + "...", result: "rejected" },
+    });
+    await detectAndLogAnomaly({
+      ip,
+      eventPattern: "share.access_invalid%",
+      anomalyEvent: "security.token_enumeration_detected",
+      threshold: 3,
+      windowMinutes: 5,
+      metadata: { type: "token_not_found" },
+    });
+    res.status(404).json({ error: "Token inválido o no encontrado" });
+    return;
+  }
+
+  if (shareRow.revoked) {
+    await log({
+      event: "share.access_denied",
+      severity: "warn",
+      ip,
+      metadata: { reason: "revoked", token: token.slice(0, 8) + "...", result: "rejected" },
+    });
+    res.status(410).json({ error: "Este token fue revocado" });
+    return;
+  }
+
+  if (new Date(shareRow.expires_at) < new Date()) {
+    await log({
+      event: "share.access_denied",
+      severity: "warn",
+      ip,
+      metadata: { reason: "expired", token: token.slice(0, 8) + "...", result: "rejected" },
+    });
+    res.status(410).json({ error: "Este token expiró" });
+    return;
+  }
 
   const existingRequest = await queryOne<{ id: string; status: string }>(
     `SELECT id, status FROM uni_access_requests WHERE share_token_id = $1`,
@@ -89,21 +149,33 @@ router.post("/request-access", async (req: Request, res: Response) => {
   );
 
   if (!existingRequest) { res.status(404).json({ error: "Solicitud no encontrada" }); return; }
-  if (existingRequest.status === "approved") { res.status(409).json({ error: "Token ya fue usado" }); return; }
+
+  if (existingRequest.status === "approved") {
+    await log({
+      event: "share.access_denied",
+      severity: "warn",
+      ip,
+      metadata: { reason: "already_used", token: token.slice(0, 8) + "...", result: "rejected" },
+    });
+    res.status(409).json({ error: "Token ya fue usado" });
+    return;
+  }
+
   if (existingRequest.status === "rejected" || existingRequest.status === "revoked") {
-    res.status(403).json({ error: "Acceso denegado" }); return;
+    res.status(403).json({ error: "Acceso denegado" });
+    return;
   }
 
   await query(
     `UPDATE uni_access_requests
      SET status = 'pending', requester_ip = $2, requester_device = $3, updated_at = NOW()
      WHERE id = $1`,
-    [existingRequest.id, req.ip ?? "unknown", requesterDevice ?? "Dispositivo desconocido"]
+    [existingRequest.id, ip, requesterDevice ?? "Dispositivo desconocido"]
   );
 
   await log({
     event: "share.access_requested",
-    ip: req.ip,
+    ip,
     metadata: {
       token: token.slice(0, 8) + "...",
       requestId: existingRequest.id,
