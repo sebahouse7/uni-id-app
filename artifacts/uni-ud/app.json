@@ -2,7 +2,7 @@
   "expo": {
     "name": "uni.id",
     "slug": "uni-ud",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "uni-ud",
@@ -21,8 +21,7 @@
         "NSPhotoLibraryUsageDescription": "uni.id accede a tu galería para adjuntar imágenes a tus documentos.",
         "NSPhotoLibraryAddUsageDescription": "uni.id guarda fotos de tus documentos en tu galería."
       },
-      "bundleIdentifier": "com.humanidhubs.uniid",
-      "buildNumber": "1"
+      "bundleIdentifier": "com.humanidhubs.uniid"
     },
     "android": {
       "adaptiveIcon": {
@@ -36,7 +35,7 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES"
       ],
-      "versionCode": 2
+      "versionCode": 5
     },
     "web": {
       "favicon": "./assets/images/icon.png",
