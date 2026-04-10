@@ -69,6 +69,7 @@
     "expo-localization": "17.0.8",
     "expo-secure-store": "15.0.8",
     "expo-sharing": "^14.0.8",
+    "react-native-get-random-values": "^2.0.0",
     "react-native-qrcode-svg": "^6.3.21"
   }
 }
