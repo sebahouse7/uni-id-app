@@ -519,3 +519,54 @@ export async function apiGetMySignatures(limit = 50): Promise<any[]> {
   const data = await res.json();
   return data.signatures ?? [];
 }
+
+// ── Activity log ──────────────────────────────────────────────────────────
+
+export interface ActivityLogFilter {
+  type?: string;
+  context?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function apiGetActivityLogs(filter: ActivityLogFilter = {}): Promise<{
+  data: any[];
+  total: number;
+  hasMore: boolean;
+}> {
+  const params = new URLSearchParams();
+  if (filter.type)    params.set("type",   filter.type);
+  if (filter.context) params.set("context", filter.context);
+  if (filter.from)    params.set("from",   filter.from);
+  if (filter.to)      params.set("to",     filter.to);
+  params.set("limit",  String(filter.limit  ?? 50));
+  params.set("offset", String(filter.offset ?? 0));
+  const res = await authFetch(`/activity?${params}`);
+  if (!res.ok) return { data: [], total: 0, hasMore: false };
+  return res.json();
+}
+
+export async function apiGetActivityDetail(id: string): Promise<any | null> {
+  const res = await authFetch(`/activity/${id}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function apiLogOfflineActivity(entry: {
+  context?: string;
+  dataShared?: string[];
+  hash?: string;
+  trustLevel?: string;
+}): Promise<void> {
+  await authFetch("/activity", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      actionType: "offline",
+      ...entry,
+      result: "success",
+    }),
+  });
+}
