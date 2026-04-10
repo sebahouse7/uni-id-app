@@ -29,7 +29,7 @@ import {
   GeneratedOfflinePackage,
   generateOfflinePackage,
 } from "@/lib/offlineIdentity";
-import { apiShareCreateQr } from "@/lib/apiClient";
+import { apiShareCreateQr, apiLogOfflineActivity } from "@/lib/apiClient";
 
 // ── Context options ────────────────────────────────────────────────────────
 
@@ -209,6 +209,17 @@ export default function UseIdentityScreen() {
       });
       setOfflineResult(result);
       setShowQRModal(true);
+      apiLogOfflineActivity({
+        context: selectedCtx ?? undefined,
+        dataShared: [
+          ...(selection.name ? ["nombre"] : []),
+          ...(selection.globalId ? ["globalId"] : []),
+          ...(selection.bio ? ["bio"] : []),
+          ...(selection.documentIds.length > 0 ? ["documentos"] : []),
+        ],
+        hash: result.compact.hash,
+        trustLevel: "high",
+      }).catch(() => {});
     } catch (e: any) {
       Alert.alert(
         "Error al generar identidad",
