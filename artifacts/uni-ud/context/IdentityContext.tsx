@@ -16,9 +16,22 @@ import {
   apiCreateDocument,
   apiUpdateDocument,
   apiDeleteDocument,
+  apiRegisterSigningKey,
 } from "../lib/apiClient";
 import { secureGet, secureSet, secureDelete } from "./SecureStorage";
 import { isVaultUri, parseVaultId, vaultDeleteEntry } from "@/lib/fileVault";
+import { hasKeyPair, generateAndStoreKeyPair } from "@/lib/signingKeys";
+
+async function ensureSigningKeys(uploadToBackend = true): Promise<void> {
+  try {
+    const alreadyHas = await hasKeyPair();
+    if (alreadyHas) return;
+    const pubKey = await generateAndStoreKeyPair();
+    if (uploadToBackend) {
+      await apiRegisterSigningKey(pubKey).catch(() => {});
+    }
+  } catch {}
+}
 
 export type DocumentCategory =
   | "identity"
@@ -267,6 +280,9 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
       const docs = await apiGetDocuments();
       setIsOnline(true);
 
+      // Ensure Ed25519 signing keys exist for offline identity — generate if missing
+      ensureSigningKeys(true).catch(() => {});
+
       // Read current local cache to preserve fields the backend might return as null
       // (e.g. name not yet saved, globalId not assigned yet)
       const rawLocalNode = await secureGet(CACHE_KEY_NODE).catch(() => null);
@@ -318,6 +334,8 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     };
     await cacheNode(newNode);
     setIsOnline(true);
+    // Generate Ed25519 signing keys immediately for new users
+    await ensureSigningKeys(true);
     // Sync from backend immediately to get full profile data
     setTimeout(() => syncWithBackend(), 500);
   }, [syncWithBackend]);
