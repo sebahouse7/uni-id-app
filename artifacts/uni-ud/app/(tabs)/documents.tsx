@@ -14,22 +14,17 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AnimatedPressable } from "@/components/ui/AnimatedPressable";
-import { PaywallGate } from "@/components/ui/PaywallGate";
 import Colors from "@/constants/colors";
 import { Radii, Shadows, Spacing } from "@/constants/design";
 import { CATEGORIES, Document, DocumentCategory, useIdentity } from "@/context/IdentityContext";
-
-const FREE_DOC_LIMIT = 3;
 
 export default function DocumentsScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { documents, node } = useIdentity();
+  const { documents } = useIdentity();
 
-  const isFree = !node?.networkPlan || node.networkPlan === "free";
-  const isAtLimit = isFree && documents.length >= FREE_DOC_LIMIT;
   const params = useLocalSearchParams<{ category?: string }>();
   const [selectedCat, setSelectedCat] = useState<DocumentCategory | "all">(
     (params.category as DocumentCategory) ?? "all"
@@ -152,11 +147,11 @@ export default function DocumentsScreen() {
             </View>
           </AnimatedPressable>
           <AnimatedPressable
-            onPress={() => isAtLimit ? router.push("/(tabs)/network") : router.push("/add-document")}
+            onPress={() => router.push("/add-document")}
             scale={0.9}
           >
-            <View style={[styles.addBtn, { backgroundColor: isAtLimit ? colors.backgroundCard : colors.tint, borderColor: isAtLimit ? "#F59E0B" : undefined, borderWidth: isAtLimit ? 1.5 : 0 }, !isAtLimit && Shadows.colored(colors.tint)]}>
-              <Feather name={isAtLimit ? "lock" : "plus"} size={20} color={isAtLimit ? "#F59E0B" : "#fff"} />
+            <View style={[styles.addBtn, { backgroundColor: colors.tint }, Shadows.colored(colors.tint)]}>
+              <Feather name="plus" size={20} color="#fff" />
             </View>
           </AnimatedPressable>
         </View>
@@ -252,17 +247,6 @@ export default function DocumentsScreen() {
           );
         }}
       />
-
-      {/* Free plan banner */}
-      {isFree && documents.length > 0 && (
-        <PaywallGate
-          compact
-          limitReached={isAtLimit}
-          currentCount={documents.length}
-          maxCount={FREE_DOC_LIMIT}
-          feature="backup en la nube"
-        />
-      )}
 
       {/* Document list */}
       <FlatList
