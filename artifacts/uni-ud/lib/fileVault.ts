@@ -33,6 +33,7 @@ import {
   writeAsStringAsync,
   deleteAsync,
   readDirectoryAsync,
+  copyAsync,
   EncodingType,
 } from "expo-file-system/legacy";
 // @ts-expect-error — @noble/ciphers uses .ts extensions in d.ts imports, incompatible with bundler resolution; works fine at runtime
@@ -58,6 +59,31 @@ function b64ToBytes(b64: string): Uint8Array {
 
 function bytesToB64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
+}
+
+/**
+ * Reads any file URI (file://, content://, ph://) as a Base64 string.
+ * content:// URIs (Android camera) are first copied to a temp file since
+ * readAsStringAsync cannot read them directly on all Android versions.
+ */
+async function readAnyUriAsBase64(uri: string): Promise<string> {
+  const needsCopy =
+    uri.startsWith("content://") ||
+    uri.startsWith("ph://") ||
+    uri.startsWith("assets-library://");
+
+  if (!needsCopy) {
+    return readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+  }
+
+  const tmpPath = (cacheDirectory ?? "") + "vault_read_" + Date.now() + ".bin";
+  try {
+    await copyAsync({ from: uri, to: tmpPath });
+    const b64 = await readAsStringAsync(tmpPath, { encoding: EncodingType.Base64 });
+    return b64;
+  } finally {
+    deleteAsync(tmpPath, { idempotent: true }).catch(() => {});
+  }
 }
 
 function extensionFrom(fileName?: string): string {
@@ -99,9 +125,7 @@ export async function vaultEncryptFile(
   const masterKey = await deriveVaultKey();
   const iv = await Crypto.getRandomBytesAsync(IV_LEN);
 
-  const fileB64 = await readAsStringAsync(localUri, {
-    encoding: EncodingType.Base64,
-  });
+  const fileB64 = await readAnyUriAsBase64(localUri);
   const plaintext = b64ToBytes(fileB64);
 
   const cipher = gcm(masterKey, iv);
