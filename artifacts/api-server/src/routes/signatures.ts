@@ -8,6 +8,7 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { body, validationResult } from "express-validator";
+import { logActivity } from "../lib/activityLog";
 import { requireAuth } from "../middlewares/auth";
 import { queryOne } from "../lib/db";
 import {
@@ -128,6 +129,16 @@ router.post(
         signatureId: record.id,
         type: record.signature_type,
       },
+    });
+
+    logActivity({
+      userId,
+      actionType: "sign",
+      hash: record.document_hash,
+      signature: record.signature,
+      result: "success",
+      trustLevel: record.signature_type === "ed25519" ? "high" : "medium",
+      ip: req.ip ?? undefined,
     });
 
     // ── Respond immediately — TSA request runs in background ────────────────
