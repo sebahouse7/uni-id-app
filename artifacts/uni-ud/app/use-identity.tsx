@@ -26,8 +26,8 @@ import {
   CONTEXT_LABELS,
   OfflineContext,
   OfflineDataSelection,
+  GeneratedOfflinePackage,
   generateOfflinePackage,
-  OfflinePackage,
 } from "@/lib/offlineIdentity";
 import { apiShareCreateQr } from "@/lib/apiClient";
 
@@ -175,10 +175,7 @@ export default function UseIdentityScreen() {
     documentIds: [],
   });
 
-  const [offlineResult, setOfflineResult] = useState<{
-    encoded: string;
-    pkg: OfflinePackage;
-  } | null>(null);
+  const [offlineResult, setOfflineResult] = useState<GeneratedOfflinePackage | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
 
   const toggleDoc = (id: string) => {
@@ -494,8 +491,7 @@ export default function UseIdentityScreen() {
         <OfflineQRModal
           visible={showQRModal}
           onClose={() => setShowQRModal(false)}
-          encoded={offlineResult.encoded}
-          pkg={offlineResult.pkg}
+          result={offlineResult}
         />
       )}
     </View>
