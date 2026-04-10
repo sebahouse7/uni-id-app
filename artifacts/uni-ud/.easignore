@@ -1,0 +1,16 @@
+# Monorepo: excluir otros artifacts que no hacen falta para el build Android
+../../artifacts/api-server
+../../artifacts/mockup-sandbox
+../../artifacts/uni-web
+../../artifacts/uni-ud/node_modules
+../../node_modules/.cache
+../../attached_assets
+../../screenshots
+../../documentos
+../../deploy
+*.tar.gz
+*.zip
+*.apk
+*.aab
+android/
+ios/
