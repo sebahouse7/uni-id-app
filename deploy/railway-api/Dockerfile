@@ -8,6 +8,7 @@ RUN npm install --omit=dev
 COPY dist/ ./dist/
 COPY migrate.mjs ./
 COPY schema.sql ./
+COPY web/ ./web/
 
 ENV NODE_ENV=production
 
