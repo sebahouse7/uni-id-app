@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -211,6 +212,34 @@ export default function SecurityScreen() {
           <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
           <Text style={[styles.statusText, { color: colors.success }]}>Activo</Text>
         </View>
+      </View>
+
+      {/* Registro de actividad — acceso rápido */}
+      <View style={{ paddingHorizontal: Spacing.md, marginBottom: 4 }}>
+        <Pressable
+          onPress={() => router.push("/activity" as any)}
+          style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+        >
+          <LinearGradient
+            colors={["#0F2040", "#0A1528"]}
+            style={{
+              flexDirection: "row", alignItems: "center", gap: 14,
+              borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#1A2540",
+            }}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          >
+            <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: "#1A6FE818", alignItems: "center", justifyContent: "center" }}>
+              <Feather name="list" size={18} color="#1A6FE8" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" }}>Registro de actividad</Text>
+              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
+                Todo lo que pasa con tu identidad · auditable y verificable
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={16} color="rgba(255,255,255,0.4)" />
+          </LinearGradient>
+        </Pressable>
       </View>
 
       {/* Access Control — biometric toggle */}
