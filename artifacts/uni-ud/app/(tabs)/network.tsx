@@ -1,11 +1,8 @@
 import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
-  Alert,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,12 +11,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AnimatedPressable } from "@/components/ui/AnimatedPressable";
 import Colors from "@/constants/colors";
 import { Radii, Shadows, Spacing } from "@/constants/design";
-import { NETWORK_PLANS, useIdentity } from "@/context/IdentityContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { openPayPalCheckout } from "@/lib/payments";
 
 const ECOSYSTEMS = [
   { icon: "briefcase", labelKey: "banks", descKey: "banksDesc", color: "#1A6FE8" },
@@ -35,24 +29,7 @@ export default function NetworkScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
-  const { node } = useIdentity();
   const { t } = useLanguage();
-  const [purchasing, setPurchasing] = useState<string | null>(null);
-
-  const handlePurchase = async (planId: string) => {
-    if (!node) return;
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    setPurchasing(planId);
-    try {
-      await openPayPalCheckout();
-    } catch (e: any) {
-      Alert.alert("Error", "No se pudo abrir PayPal. Verificá tu conexión.");
-    } finally {
-      setPurchasing(null);
-    }
-  };
 
   const connectionCount = 147382;
 
@@ -110,53 +87,12 @@ export default function NetworkScreen() {
             {t.connectedCount}
           </Text>
 
-          {node?.networkPlan !== "free" ? (
-            <View style={[styles.connectedBadge, { backgroundColor: colors.tint }]}>
-              <View style={styles.connectedDot} />
-              <Text style={styles.connectedText}>{t.identityConnected}</Text>
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.freeBadge,
-                { backgroundColor: colors.textSecondary + "18", borderColor: colors.border },
-              ]}
-            >
-              <Feather name="lock" size={12} color={colors.textSecondary} />
-              <Text style={[styles.freeBadgeText, { color: colors.textSecondary }]}>
-                Conectate con un plan para acceder a la red
-              </Text>
-            </View>
-          )}
+          <View style={[styles.connectedBadge, { backgroundColor: colors.tint }]}>
+            <View style={styles.connectedDot} />
+            <Text style={styles.connectedText}>{t.identityConnected ?? "Identidad conectada"}</Text>
+          </View>
         </LinearGradient>
       </View>
-
-      {/* Active plan badge */}
-      {node?.networkPlan !== "free" && (
-        <View style={{ paddingHorizontal: Spacing.md, marginBottom: 20 }}>
-          <View
-            style={[
-              styles.activePlan,
-              {
-                backgroundColor: colors.success + "10",
-                borderColor: colors.success + "40",
-              },
-            ]}
-          >
-            <View style={[styles.activePlanIcon, { backgroundColor: colors.success + "18" }]}>
-              <Feather name="check-circle" size={18} color={colors.success} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.activePlanTitle, { color: colors.text }]}>
-                {node?.networkPlan === "basic" ? t.basicActive : t.proActive}
-              </Text>
-              <Text style={[styles.activePlanSub, { color: colors.textSecondary }]}>
-                {t.identityEnabledEco}
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
 
       {/* Ecosystem */}
       <Text style={[styles.sectionTitle, { color: colors.text, paddingHorizontal: Spacing.md }]}>
@@ -182,148 +118,6 @@ export default function NetworkScreen() {
           </View>
         ))}
       </View>
-
-      {/* Plans */}
-      <Text style={[styles.sectionTitle, { color: colors.text, paddingHorizontal: Spacing.md }]}>
-        {t.connectionPlans}
-      </Text>
-
-      {/* Payment provider */}
-      <View style={{ paddingHorizontal: Spacing.md, marginBottom: 16 }}>
-        <View
-          style={[
-            styles.providerBadge,
-            { backgroundColor: colors.backgroundCard, borderColor: colors.border },
-          ]}
-        >
-          <View style={[styles.providerIcon, { backgroundColor: colors.success + "18" }]}>
-            <Feather name="lock" size={13} color={colors.success} />
-          </View>
-          <Text style={[styles.providerText, { color: colors.textSecondary }]}>
-            Pagos procesados por{" "}
-            <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>
-              Mercado Pago
-            </Text>{" "}
-            — 100% seguro
-          </Text>
-        </View>
-      </View>
-
-      {NETWORK_PLANS.map((plan) => {
-        const isActive = node?.networkPlan === plan.id;
-        const isPro = plan.id === "pro";
-
-        return (
-          <View key={plan.id} style={{ paddingHorizontal: Spacing.md, marginBottom: 16 }}>
-            <LinearGradient
-              colors={
-                isPro
-                  ? isDark
-                    ? ["#0A1628", "#0F1E3A"]
-                    : ["#EEF4FF", "#E0ECFF"]
-                  : isDark
-                  ? ["#0D1525", "#0D1525"]
-                  : ["#fff", "#fff"]
-              }
-              style={[
-                styles.planCard,
-                {
-                  borderColor: isPro
-                    ? isDark
-                      ? "#1A6FE860"
-                      : "#1A6FE840"
-                    : colors.border,
-                  borderWidth: isPro ? 1.5 : 1,
-                },
-                Shadows.md,
-              ]}
-            >
-              {isPro && (
-                <View style={[styles.proBadge, { backgroundColor: colors.tint }]}>
-                  <Feather name="zap" size={11} color="#fff" />
-                  <Text style={styles.proBadgeText}>{t.mostPopular}</Text>
-                </View>
-              )}
-
-              <View style={styles.planHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.planName, { color: colors.text }]}>{plan.name}</Text>
-                  <Text style={[styles.planDesc, { color: colors.textSecondary }]}>
-                    {plan.description}
-                  </Text>
-                </View>
-                <View style={styles.priceWrap}>
-                  <Text style={[styles.price, { color: colors.text }]}>${plan.price}</Text>
-                  <Text style={[styles.pricePer, { color: colors.textSecondary }]}>
-                    {t.perMonth}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.features}>
-                {plan.features.map((f, i) => (
-                  <View key={i} style={styles.featureRow}>
-                    <View
-                      style={[styles.featureCheck, { backgroundColor: colors.success + "18" }]}
-                    >
-                      <Feather name="check" size={12} color={colors.success} />
-                    </View>
-                    <Text style={[styles.featureText, { color: colors.text }]}>{f}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <AnimatedPressable
-                onPress={() => !isActive && handlePurchase(plan.id as PlanId)}
-                disabled={isActive || !!purchasing}
-                scale={0.97}
-              >
-                {isActive ? (
-                  <View
-                    style={[
-                      styles.planBtn,
-                      {
-                        backgroundColor: colors.success + "15",
-                        borderColor: colors.success + "50",
-                        borderWidth: 1,
-                      },
-                    ]}
-                  >
-                    <Feather name="check-circle" size={16} color={colors.success} />
-                    <Text style={[styles.planBtnText, { color: colors.success }]}>
-                      {t.planActive}
-                    </Text>
-                  </View>
-                ) : isPro ? (
-                  <LinearGradient
-                    colors={["#1A6FE8", "#0D8AEB"]}
-                    style={[styles.planBtn, Shadows.colored("#1A6FE8")]}
-                  >
-                    <Text style={[styles.planBtnText, { color: "#fff" }]}>
-                      {purchasing === plan.id ? t.processing : `${t.activate} ${plan.name}`}
-                    </Text>
-                  </LinearGradient>
-                ) : (
-                  <View
-                    style={[
-                      styles.planBtn,
-                      {
-                        backgroundColor: colors.backgroundCard,
-                        borderColor: colors.border,
-                        borderWidth: 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.planBtnText, { color: colors.text }]}>
-                      {purchasing === plan.id ? t.processing : `${t.activate} ${plan.name}`}
-                    </Text>
-                  </View>
-                )}
-              </AnimatedPressable>
-            </LinearGradient>
-          </View>
-        );
-      })}
 
       {/* Security note */}
       <View style={{ paddingHorizontal: Spacing.md }}>
