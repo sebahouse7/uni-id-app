@@ -38,7 +38,7 @@ export type DocumentCategory =
   | "passport"
   | "education"
   | "health"
-  | "driving"
+  | "realestate"
   | "property"
   | "pets"
   | "other";
@@ -474,7 +474,7 @@ export const CATEGORIES: { key: DocumentCategory; label: string; icon: string; s
   { key: "passport",  label: "Pasaporte",    icon: "globe",       sfIcon: "globe",              color: "#0891B2" },
   { key: "education", label: "Estudios",      icon: "book",        sfIcon: "graduationcap.fill", color: "#7C3AED" },
   { key: "health",    label: "Salud",         icon: "heart",       sfIcon: "heart.fill",         color: "#E53E3E" },
-  { key: "driving",   label: "Licencia",      icon: "truck",       sfIcon: "car.fill",           color: "#D69E2E" },
+  { key: "realestate", label: "Inmobiliaria",  icon: "key",         sfIcon: "key.fill",           color: "#D69E2E" },
   { key: "property",  label: "Propiedades",   icon: "home",        sfIcon: "house.fill",         color: "#38A169" },
   { key: "pets",      label: "Mascotas",      icon: "github",      sfIcon: "pawprint.fill",      color: "#DD6B20" },
   { key: "other",     label: "Otros",         icon: "folder",      sfIcon: "folder.fill",        color: "#718096" },
