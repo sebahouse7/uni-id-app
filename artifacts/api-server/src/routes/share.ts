@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { requireAuth } from "../middlewares/auth";
 import { query, queryOne } from "../lib/db";
 import { log, detectAndLogAnomaly } from "../lib/audit";
+import { logActivity } from "../lib/activityLog";
 import { requestAccessLimiter, createQrLimiter } from "../middlewares/rateLimit";
 
 const router = Router();
@@ -56,6 +57,18 @@ router.post("/create-qr", requireAuth, createQrLimiter, async (req: Request, res
       permissions,
       result: "success",
     },
+  });
+
+  const sharedFields: string[] = Object.entries(permissions)
+    .filter(([, v]) => v)
+    .map(([k]) => k);
+  logActivity({
+    userId,
+    actionType: "share",
+    dataShared: sharedFields,
+    result: "pending",
+    ip: req.ip ?? undefined,
+    device: req.get("X-Device-Name") ?? undefined,
   });
 
   res.json({
