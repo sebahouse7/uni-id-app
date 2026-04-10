@@ -276,6 +276,16 @@ export async function apiGetSubscriptionStatus(): Promise<any> {
   return res.json();
 }
 
+export async function apiActivatePayPalEmpresa(transactionId: string): Promise<{ ok: boolean; message: string; expiresAt?: string }> {
+  const res = await authFetch("/subscriptions/paypal/activate", {
+    method: "POST",
+    body: JSON.stringify({ transactionId }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Error al activar plan");
+  return data;
+}
+
 export async function isLoggedIn(): Promise<boolean> {
   const token = await getAccessToken();
   return !!token;
