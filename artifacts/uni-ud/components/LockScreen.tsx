@@ -225,7 +225,9 @@ export function LockScreen() {
       {/* ── Logo ── */}
       <View style={styles.logoSection}>
         <Animated.View style={{ transform: [{ scale: logoScale }] }}>
-          <Image source={LOGO} style={styles.logoImg} resizeMode="contain" />
+          <View style={styles.logoContainer}>
+            <Image source={LOGO} style={styles.logoImg} resizeMode="cover" />
+          </View>
         </Animated.View>
         <Text style={styles.appName}>UNI ID</Text>
         <Text style={styles.appTagline}>Tu identidad digital unificada</Text>
@@ -407,10 +409,18 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 24,
   },
+  logoContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 22,
+    overflow: "hidden",
+    backgroundColor: "#0a0f1f",
+  },
   logoImg: {
-    width: 120,
-    height: 120,
-    borderRadius: 26,
+    width: 130,
+    height: 130,
+    marginLeft: -15,
+    marginTop: -15,
   },
   appName: {
     fontSize: 34,
