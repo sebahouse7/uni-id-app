@@ -412,6 +412,67 @@ router.post("/webhook/stripe", async (req: Request, res: Response) => {
   res.sendStatus(200);
 });
 
+// ─── PayPal: activar plan Empresa ─────────────────────────────────────────────
+// El usuario llama este endpoint con su ID de transacción PayPal después de pagar.
+// Activa el plan "empresa" por 1 año y notifica al admin.
+router.post(
+  "/paypal/activate",
+  requireAuth,
+  [body("transactionId").isString().trim().notEmpty().withMessage("transactionId requerido")],
+  async (req: Request, res: Response) => {
+    if (!validate(req, res)) return;
+    const userId = req.user!.sub;
+    const { transactionId } = req.body as { transactionId: string };
+
+    try {
+      // Verificar que no tenga ya el plan activo
+      const user = await queryOne<{ network_plan: string; plan_expires_at: string | null; name: string; recovery_email_enc: string | null }>(
+        `SELECT network_plan, plan_expires_at, name, recovery_email_enc FROM uni_users WHERE id = $1`,
+        [userId]
+      );
+      if (!user) { res.status(404).json({ error: "Usuario no encontrado" }); return; }
+
+      const expiresAt = user.plan_expires_at ? new Date(user.plan_expires_at) : null;
+      const isActive = expiresAt !== null && expiresAt > new Date() && user.network_plan === "empresa";
+      if (isActive) {
+        res.json({ ok: true, message: "Plan Empresa ya activo", expiresAt: expiresAt!.toISOString() });
+        return;
+      }
+
+      // Registrar transacción en historial
+      await query(
+        `INSERT INTO uni_subscriptions (user_id, plan, status, provider, amount, currency, provider_payment_id)
+         VALUES ($1,'empresa','active','paypal',0,'USD',$2)
+         ON CONFLICT DO NOTHING`,
+        [userId, transactionId]
+      );
+
+      // Activar el plan "empresa" por 1 año
+      const newExpiry = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      await query(
+        `UPDATE uni_users SET network_plan='empresa', plan_expires_at=$1, updated_at=NOW() WHERE id=$2`,
+        [newExpiry, userId]
+      );
+
+      await log({
+        userId,
+        event: "subscription.paypal_activated",
+        severity: "info",
+        ip: req.ip,
+        metadata: { transactionId, plan: "empresa", expiresAt: newExpiry },
+      });
+
+      // Notificar por email si tiene email configurado
+      await sendSubscriptionEmail(userId, "empresa", "activated");
+
+      res.json({ ok: true, message: "Plan Empresa activado por 1 año", expiresAt: newExpiry });
+    } catch (err: any) {
+      await log({ userId, event: "subscription.paypal_activate_error", severity: "warn", ip: req.ip, metadata: { error: err.message } });
+      res.status(500).json({ error: "Error al activar el plan. Intentá nuevamente." });
+    }
+  }
+);
+
 // ─── Helper: enviar email de suscripción ─────────────────────────────────────
 async function sendSubscriptionEmail(
   userId: string,
