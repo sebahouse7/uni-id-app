@@ -5,6 +5,7 @@ import {
   Image,
   StyleSheet,
   Text,
+  View,
 } from "react-native";
 
 interface Props {
@@ -54,7 +55,9 @@ export function SplashScreenCustom({ onFinish }: Props) {
   return (
     <Animated.View style={[styles.container, { opacity: fadeOut }]}>
       <Animated.View style={[styles.content, { opacity, transform: [{ scale }] }]}>
-        <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+        <View style={styles.logoContainer}>
+          <Image source={LOGO} style={styles.logo} resizeMode="cover" />
+        </View>
         <Text style={styles.title}>UNI ID</Text>
         <Text style={styles.sub}>human.id labs</Text>
       </Animated.View>
@@ -78,11 +81,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  logo: {
-    width: 130,
-    height: 130,
-    borderRadius: 28,
+  logoContainer: {
+    width: 110,
+    height: 110,
+    borderRadius: 24,
+    overflow: "hidden",
+    backgroundColor: "#0a0f1f",
     marginBottom: 24,
+  },
+  logo: {
+    width: 140,
+    height: 140,
+    marginLeft: -15,
+    marginTop: -15,
   },
   title: {
     fontSize: 36,
