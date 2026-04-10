@@ -22,6 +22,7 @@ import { Radii, Shadows, Spacing } from "@/constants/design";
 import { useIdentity } from "@/context/IdentityContext";
 import { useLanguage } from "@/context/LanguageContext";
 import {
+  apiActivatePayPalEmpresa,
   apiAddBusinessDocument,
   apiCreateBusiness,
   apiDeleteBusiness,
@@ -66,9 +67,11 @@ export default function BusinessScreen() {
   const isDark = colorScheme === "dark";
   const colors = isDark ? Colors.dark : Colors.light;
   const { t } = useLanguage();
-  const { node } = useIdentity();
-
+  const { node, updateNode } = useIdentity();
   const [paying, setPaying] = useState(false);
+  const [paypalDone, setPaypalDone] = useState(false);
+  const [txId, setTxId] = useState("");
+  const [activating, setActivating] = useState(false);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Business | null>(null);
@@ -252,35 +255,99 @@ export default function BusinessScreen() {
               <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: c.text }}>{feat}</Text>
             </View>
           ))}
-          <AnimatedPressable
-            onPress={async () => {
-              setPaying(true);
-              try {
-                await openPayPalCheckout();
-              } finally {
-                setPaying(false);
-              }
-            }}
-            style={{
-              marginTop: 32, borderRadius: 16, overflow: "hidden",
-              width: "100%", opacity: paying ? 0.7 : 1,
-            }}
-            disabled={paying}
-          >
-            <LinearGradient
-              colors={["#003087", "#009CDE"]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={{ paddingVertical: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 10 }}
-            >
-              <Feather name="credit-card" size={18} color="#fff" />
-              <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" }}>
-                {paying ? "Abriendo PayPal..." : "Suscribirse con PayPal"}
+          {!paypalDone ? (
+            <>
+              <AnimatedPressable
+                onPress={async () => {
+                  setPaying(true);
+                  try {
+                    await openPayPalCheckout();
+                    setPaypalDone(true);
+                  } finally {
+                    setPaying(false);
+                  }
+                }}
+                style={{
+                  marginTop: 32, borderRadius: 16, overflow: "hidden",
+                  width: "100%", opacity: paying ? 0.7 : 1,
+                }}
+                disabled={paying}
+              >
+                <LinearGradient
+                  colors={["#003087", "#009CDE"]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={{ paddingVertical: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 10 }}
+                >
+                  <Feather name="credit-card" size={18} color="#fff" />
+                  <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" }}>
+                    {paying ? "Abriendo PayPal..." : "Suscribirse con PayPal"}
+                  </Text>
+                </LinearGradient>
+              </AnimatedPressable>
+              <Text style={{ marginTop: 14, fontSize: 12, fontFamily: "Inter_400Regular", color: c.sub, textAlign: "center" }}>
+                Pago seguro · Cancelá cuando quieras
               </Text>
-            </LinearGradient>
-          </AnimatedPressable>
-          <Text style={{ marginTop: 14, fontSize: 12, fontFamily: "Inter_400Regular", color: c.sub, textAlign: "center" }}>
-            Pago seguro · Cancelá cuando quieras
-          </Text>
+              <AnimatedPressable onPress={() => setPaypalDone(true)} style={{ marginTop: 16 }}>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: c.accent, textAlign: "center" }}>
+                  ¿Ya completaste el pago? Activar aquí
+                </Text>
+              </AnimatedPressable>
+            </>
+          ) : (
+            <View style={{ marginTop: 28, width: "100%", gap: 12 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: c.text, textAlign: "center" }}>
+                Confirmar pago de PayPal
+              </Text>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: c.sub, textAlign: "center", lineHeight: 20 }}>
+                Ingresá el ID de transacción de PayPal (lo encontrás en tu email de confirmación o en la app de PayPal).
+              </Text>
+              <TextInput
+                placeholder="ID de transacción (ej: 7DX12345AB67890)"
+                placeholderTextColor={c.sub}
+                value={txId}
+                onChangeText={setTxId}
+                autoCapitalize="characters"
+                style={{
+                  borderWidth: 1, borderColor: c.border, borderRadius: 12,
+                  paddingHorizontal: 16, paddingVertical: 14,
+                  color: c.text, fontFamily: "Inter_400Regular", fontSize: 14,
+                  backgroundColor: c.card,
+                }}
+              />
+              <AnimatedPressable
+                onPress={async () => {
+                  if (!txId.trim()) {
+                    Alert.alert("Falta el ID", "Ingresá el ID de transacción de PayPal.");
+                    return;
+                  }
+                  setActivating(true);
+                  try {
+                    await apiActivatePayPalEmpresa(txId.trim());
+                    await updateNode({ networkPlan: "empresa" as any });
+                  } catch (e: any) {
+                    Alert.alert("Error", e.message ?? "No se pudo activar el plan.");
+                  } finally {
+                    setActivating(false);
+                  }
+                }}
+                style={{ borderRadius: 14, overflow: "hidden", opacity: activating ? 0.7 : 1 }}
+                disabled={activating}
+              >
+                <LinearGradient
+                  colors={["#1A6FE8", "#7C3AED"]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={{ paddingVertical: 15, alignItems: "center", justifyContent: "center" }}
+                >
+                  <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: "#fff" }}>
+                    {activating ? "Activando..." : "Activar Plan Empresa"}
+                  </Text>
+                </LinearGradient>
+              </AnimatedPressable>
+              <AnimatedPressable onPress={() => setPaypalDone(false)} style={{ alignItems: "center" }}>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: c.sub }}>← Volver a PayPal</Text>
+              </AnimatedPressable>
+            </View>
+          )}
         </View>
       </View>
     );
