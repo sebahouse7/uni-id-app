@@ -107,6 +107,24 @@ ALTER TABLE public.uni_document_signatures ADD COLUMN IF NOT EXISTS tsa_endpoint
 CREATE INDEX IF NOT EXISTS idx_doc_sigs_tsa_status ON public.uni_document_signatures USING btree (tsa_status);
 CREATE TABLE IF NOT EXISTS public.daily_anchor (date date NOT NULL PRIMARY KEY,merkle_root text NOT NULL,signature_count integer DEFAULT 0 NOT NULL,computed_at timestamp with time zone DEFAULT now() NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_daily_anchor_date ON public.daily_anchor USING btree (date DESC);
+CREATE TABLE IF NOT EXISTS public.activity_logs (
+  id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES public.uni_users(id) ON DELETE CASCADE,
+  action_type text NOT NULL,
+  context text,
+  target text,
+  data_shared jsonb,
+  hash text,
+  signature text,
+  result text DEFAULT 'success' NOT NULL,
+  trust_level text,
+  ip text,
+  device text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON public.activity_logs USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_type ON public.activity_logs USING btree (action_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_context ON public.activity_logs USING btree (context, created_at DESC);
 `;
 
 export async function runMigration(): Promise<void> {
