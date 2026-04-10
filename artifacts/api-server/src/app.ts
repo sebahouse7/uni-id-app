@@ -128,7 +128,8 @@ app.get("/api/download/uni-id.apk", (_req: Request, res: Response) => {
 });
 
 // ─── Web frontend (static build) ─────────────────────────────────────────────
-const webDistPath = join(resolve(__dirname, "../../.."), "artifacts/uni-web/dist/public");
+// On Railway: __dirname = /app/dist → web files at /app/web
+const webDistPath = join(__dirname, "../web");
 app.use("/uni-web", express.static(webDistPath, { maxAge: "1h", etag: true }));
 app.get("/uni-web/{*path}", (_req: Request, res: Response) => {
   res.sendFile(join(webDistPath, "index.html"));
