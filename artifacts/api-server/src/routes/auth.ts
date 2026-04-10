@@ -7,6 +7,7 @@ import { hashDeviceId } from "../lib/crypto";
 import { hashEmail, encryptFieldAsync, decryptFieldAsync } from "../lib/keyManager";
 import { storeUserPublicKey, getUserPublicKey, getKeyFingerprint } from "../lib/signing";
 import { log, getAuditLogs } from "../lib/audit";
+import { logActivity } from "../lib/activityLog";
 import { recordFailedAttempt, raiseSecurityEvent } from "../lib/monitor";
 import { requireAuth } from "../middlewares/auth";
 import { authLimiter } from "../middlewares/rateLimit";
@@ -87,6 +88,13 @@ router.post(
         await log({ userId: user.id, event: "auth.register", ip, userAgent: ua, metadata: { platform: deviceMeta.devicePlatform, hasRecoveryEmail: !!recoveryEmail } });
       } else {
         await log({ userId: user.id, event: "auth.login", ip, userAgent: ua, metadata: { platform: deviceMeta.devicePlatform } });
+        logActivity({
+          userId: user.id,
+          actionType: "login",
+          result: "success",
+          device: deviceMeta.devicePlatform ?? undefined,
+          ip: ip ?? undefined,
+        });
       }
 
       const accessToken = signAccessToken(user.id, hashedDevice);
