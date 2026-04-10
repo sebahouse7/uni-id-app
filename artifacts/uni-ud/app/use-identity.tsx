@@ -29,7 +29,8 @@ import {
   GeneratedOfflinePackage,
   generateOfflinePackage,
 } from "@/lib/offlineIdentity";
-import { apiShareCreateQr, apiLogOfflineActivity } from "@/lib/apiClient";
+import { apiShareCreateQr, apiLogOfflineActivity, apiRegisterSigningKey } from "@/lib/apiClient";
+import { hasKeyPair, generateAndStoreKeyPair } from "@/lib/signingKeys";
 
 // ── Context options ────────────────────────────────────────────────────────
 
@@ -192,6 +193,13 @@ export default function UseIdentityScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGenerating(true);
     try {
+      // Auto-generate Ed25519 keys if missing (first time or after reinstall)
+      const keysOk = await hasKeyPair();
+      if (!keysOk) {
+        const pubKey = await generateAndStoreKeyPair();
+        apiRegisterSigningKey(pubKey).catch(() => {});
+      }
+
       const result = await generateOfflinePackage({
         uid: node.globalId ?? node.id,
         name: node.name,
