@@ -122,7 +122,7 @@ export default function HomeScreen() {
   const totalDocs = documents.length;
   const recentDocs = documents.slice(0, 3);
   const personalDocs = documents.filter((d) =>
-    ["identity", "passport", "education", "health", "driving", "property"].includes(d.category)
+    ["identity", "passport", "education", "health", "realestate", "property"].includes(d.category)
   );
 
   const planLabel =
