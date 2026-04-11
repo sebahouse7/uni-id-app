@@ -17,9 +17,11 @@ import * as ed from "@noble/ed25519";
 import { sha512 } from "@noble/hashes/sha512";
 import { secureGet, secureSet } from "@/context/SecureStorage";
 
-// Wire sha512 synchronous implementation required by @noble/ed25519 in React Native
-// sha512 from @noble/hashes accepts the same signature as etc.sha512Sync
+// Wire sha512 for @noble/ed25519 in React Native.
+// BOTH sync AND async MUST be set — async operations (signAsync, verifyAsync) fall back
+// to crypto.subtle which is not available in React Native → "crypto.subtle must be defined"
 ed.etc.sha512Sync = sha512 as typeof ed.etc.sha512Sync;
+ed.etc.sha512Async = (msg: Uint8Array) => Promise.resolve(sha512(msg));
 
 const PRIV_KEY = "uni_signing_priv_v1";
 const PUB_KEY = "uni_signing_pub_v1";
