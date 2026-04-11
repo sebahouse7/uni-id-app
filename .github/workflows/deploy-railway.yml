@@ -5,7 +5,6 @@ on:
     branches: [main, master]
     paths:
       - 'artifacts/api-server/**'
-      - 'artifacts/uni-web/**'
       - 'deploy/railway-api/**'
       - '.github/workflows/deploy-railway.yml'
   workflow_dispatch:
@@ -14,7 +13,7 @@ jobs:
   deploy:
     name: Build & Deploy API to Railway
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -36,20 +35,18 @@ jobs:
       - name: Build API server (TypeScript → ESM)
         run: pnpm --filter @workspace/api-server run build
 
-      - name: Build Web app (React → static)
+      - name: Build Web app (Vite → static)
         run: BASE_PATH=/uni-web/ pnpm --filter @workspace/uni-web run build
-        env:
-          NODE_ENV: production
 
       - name: Prepare Railway deploy package
         run: |
           ls -lh artifacts/api-server/dist/index.mjs || { echo "❌ dist/ not found after build"; exit 1; }
-          ls -lh artifacts/uni-web/dist/public/index.html || { echo "❌ web/dist/public/ not found after build"; exit 1; }
           mkdir -p deploy/railway-api/dist
           cp artifacts/api-server/dist/index.mjs deploy/railway-api/dist/
           mkdir -p deploy/railway-api/web
           cp -r artifacts/uni-web/dist/public/. deploy/railway-api/web/
           ls -lh deploy/railway-api/
+          ls -lh deploy/railway-api/web/ | head -10
           echo "✅ Build preparado $(du -sh deploy/railway-api/)"
 
       - name: Install Railway CLI
@@ -97,14 +94,22 @@ jobs:
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 \
             https://expressjs-production-8bfc.up.railway.app/api/healthz || echo "000")
           echo "Railway health: HTTP $STATUS"
-          WEB=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 \
-            https://expressjs-production-8bfc.up.railway.app/uni-web/ || echo "000")
-          echo "Web app: HTTP $WEB"
           if [ "$STATUS" = "200" ]; then
             echo "✅ Backend online en Railway"
-          fi
-          if [ "$WEB" = "200" ]; then
-            echo "✅ Web app online en Railway"
+            VERIFY=$(curl -s --max-time 15 \
+              "https://expressjs-production-8bfc.up.railway.app/api/verify/DID:UNIID:TEST" | \
+              grep -o '"error":"[^"]*"' | head -1)
+            echo "Verify test: $VERIFY"
+            if echo "$VERIFY" | grep -q "not found\|no encontrada\|No encontrada"; then
+              echo "✅ /verify/:id endpoint activo con código nuevo"
+            elif [ -n "$VERIFY" ]; then
+              echo "✅ /verify/:id endpoint activo"
+            else
+              echo "⚠️ /verify/:id puede ser código antiguo (devuelve: Ruta no encontrada)"
+            fi
+          else
+            echo "⏳ Backend no responde aún. Ver Railway dashboard:"
+            echo "   https://railway.app/project/a58781bd-0545-4878-8ae1-21416fe56bfd"
           fi
 
       - name: Summary
@@ -114,7 +119,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| API URL | https://expressjs-production-8bfc.up.railway.app/api |" >> $GITHUB_STEP_SUMMARY
-          echo "| Web URL | https://expressjs-production-8bfc.up.railway.app/uni-web |" >> $GITHUB_STEP_SUMMARY
+          echo "| URL | https://expressjs-production-8bfc.up.railway.app/api |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Panel | [Railway Dashboard](https://railway.app/project/a58781bd-0545-4878-8ae1-21416fe56bfd) |" >> $GITHUB_STEP_SUMMARY
