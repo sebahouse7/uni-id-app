@@ -122,11 +122,15 @@ export async function vaultEncryptFile(
 ): Promise<string> {
   await ensureDir(VAULT_DIR);
 
-  const masterKey = await deriveVaultKey();
-  const iv = await Crypto.getRandomBytesAsync(IV_LEN);
+  const rawKey = await deriveVaultKey();
+  // Coerce to plain Uint8Array — native modules in React Native return typed arrays
+  // that may fail instanceof checks inside @noble/ciphers
+  const masterKey = new Uint8Array(rawKey);
+  const rawIv = await Crypto.getRandomBytesAsync(IV_LEN);
+  const iv = new Uint8Array(rawIv);
 
   const fileB64 = await readAnyUriAsBase64(localUri);
-  const plaintext = b64ToBytes(fileB64);
+  const plaintext = new Uint8Array(b64ToBytes(fileB64));
 
   const cipher = gcm(masterKey, iv);
   const ciphertext = cipher.encrypt(plaintext);
@@ -168,12 +172,12 @@ export async function vaultDecryptToMemory(
     const vaultInfo = await getInfoAsync(vaultPath);
     if (!vaultInfo.exists) return null;
 
-    const masterKey = await deriveVaultKey();
+    const masterKey = new Uint8Array(await deriveVaultKey());
 
     const combinedB64 = await readAsStringAsync(vaultPath, {
       encoding: EncodingType.Base64,
     });
-    const combined = b64ToBytes(combinedB64);
+    const combined = new Uint8Array(b64ToBytes(combinedB64));
 
     const iv = combined.slice(0, IV_LEN);
     const ciphertext = combined.slice(IV_LEN);
