@@ -1,7 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as ClipboardLib from "expo-clipboard";
 import * as FileSystem from "expo-file-system";
-import { EncodingType } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Sharing from "expo-sharing";
@@ -75,7 +74,7 @@ export function OfflineQRModal({ visible, onClose, result }: OfflineQRModalProps
       const fileUri = FileSystem.cacheDirectory + fileName;
       // Escribe el paquete COMPLETO (con sessionKey + IV + ciphertext)
       await FileSystem.writeAsStringAsync(fileUri, fullEncoded, {
-        encoding: EncodingType.UTF8,
+        encoding: "utf8" as any,
       });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
