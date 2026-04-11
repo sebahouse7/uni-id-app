@@ -39,7 +39,10 @@ import { sha512 } from "@noble/hashes/sha512";
 import { secureGet } from "@/context/SecureStorage";
 
 // Wire sha512 for @noble/ed25519 in React Native
+// BOTH sync AND async must be set — otherwise ed25519 falls back to crypto.subtle which
+// is not available in React Native and throws "crypto.subtle must be defined"
 ed.etc.sha512Sync = sha512 as typeof ed.etc.sha512Sync;
+ed.etc.sha512Async = (msg: Uint8Array) => Promise.resolve(sha512(msg));
 
 // ── TTL ────────────────────────────────────────────────────────────────────
 
