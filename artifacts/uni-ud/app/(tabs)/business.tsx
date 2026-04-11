@@ -228,11 +228,14 @@ export default function BusinessScreen() {
             <Text style={[s.headerSub, { color: c.sub }]}>{t.businessSubtitle ?? "Identidad empresarial"}</Text>
           </View>
         </View>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+        >
           <LinearGradient
             colors={["#1A6FE8", "#7C3AED"]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={{ width: 72, height: 72, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 24 }}
+            style={{ width: 72, height: 72, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 24, marginTop: 32 }}
           >
             <Feather name="briefcase" size={32} color="#fff" />
           </LinearGradient>
@@ -348,7 +351,7 @@ export default function BusinessScreen() {
               </AnimatedPressable>
             </View>
           )}
-        </View>
+        </ScrollView>
       </View>
     );
   }
