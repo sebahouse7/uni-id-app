@@ -2,7 +2,7 @@
   "expo": {
     "name": "uni.id",
     "slug": "uni-ud",
-    "version": "1.2.4",
+    "version": "1.2.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "uni-ud",
@@ -35,7 +35,7 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES"
       ],
-      "versionCode": 8
+      "versionCode": 9
     },
     "web": {
       "favicon": "./assets/images/icon.png",
