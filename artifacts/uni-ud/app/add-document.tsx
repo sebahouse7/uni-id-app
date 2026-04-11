@@ -43,8 +43,9 @@ export default function AddDocumentScreen() {
       const vaultUri = await vaultEncryptFile(rawUri, newVaultId());
       setFileName(name);
       setFileUri(vaultUri);
-    } catch {
-      Alert.alert("Error de seguridad", "No se pudo cifrar el archivo. Intentá de nuevo.");
+    } catch (err: any) {
+      const msg = err?.message ?? String(err) ?? "Error desconocido";
+      Alert.alert("Error de seguridad", `No se pudo cifrar el archivo.\n\n${msg}`);
     } finally {
       setEncrypting(false);
     }
