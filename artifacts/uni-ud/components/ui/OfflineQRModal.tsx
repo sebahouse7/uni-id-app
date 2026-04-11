@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as ClipboardLib from "expo-clipboard";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Sharing from "expo-sharing";
